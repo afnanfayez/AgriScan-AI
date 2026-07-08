@@ -1,0 +1,6 @@
+{
+  "name": "AgriScan AI",
+  "description": "An AI-powered plant health inspection and crop management platform for farmers, nurseries, and gardeners.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
