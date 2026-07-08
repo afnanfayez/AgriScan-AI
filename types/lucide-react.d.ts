@@ -1,0 +1,43 @@
+declare module 'lucide-react' {
+  import { ComponentType, SVGProps } from 'react';
+  export type IconProps = SVGProps<SVGSVGElement> & {
+    size?: string | number;
+    absoluteStrokeWidth?: boolean;
+  };
+  export type Icon = ComponentType<IconProps>;
+  export const Sprout: Icon;
+  export const Camera: Icon;
+  export const Upload: Icon;
+  export const Heart: Icon;
+  export const AlertTriangle: Icon;
+  export const CheckCircle: Icon;
+  export const Settings: Icon;
+  export const Users: Icon;
+  export const FileText: Icon;
+  export const CloudSun: Icon;
+  export const User: Icon;
+  export const LogOut: Icon;
+  export const Search: Icon;
+  export const Plus: Icon;
+  export const Loader2: Icon;
+  export const X: Icon;
+  export const Send: Icon;
+  export const ChevronRight: Icon;
+  export const Check: Icon;
+  export const BookOpen: Icon;
+  export const FileDown: Icon;
+  export const MessageSquare: Icon;
+  export const Award: Icon;
+  export const Clock: Icon;
+  export const Thermometer: Icon;
+  export const Droplets: Icon;
+  export const Wind: Icon;
+  export const MapPin: Icon;
+  export const TrendingUp: Icon;
+  export const Bell: Icon;
+  export const Sliders: Icon;
+  export const Sparkles: Icon;
+  // Fallback for other icons if needed
+  const icons: { [key: string]: Icon };
+  export default icons;
+}

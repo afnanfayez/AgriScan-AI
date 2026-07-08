@@ -192,7 +192,7 @@ export async function GET(req: NextRequest) {
       userTreatments.forEach((t: any) => treatSheet.addRow(t));
 
       const buffer = await workbook.xlsx.writeBuffer();
-      return new NextResponse(buffer as Buffer, {
+      return new NextResponse(buffer as any, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': 'attachment; filename="AgriScan_Farm_Report.xlsx"',
