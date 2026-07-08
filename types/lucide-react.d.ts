@@ -37,6 +37,13 @@ declare module 'lucide-react' {
   export const Bell: Icon;
   export const Sliders: Icon;
   export const Sparkles: Icon;
+  export const Eye: Icon;
+  export const EyeOff: Icon;
+  export const ShieldCheck: Icon;
+  export const KeyRound: Icon;
+  export const ArrowLeft: Icon;
+  export const RefreshCw: Icon;
+  export const Mail: Icon;
   // Fallback for other icons if needed
   const icons: { [key: string]: Icon };
   export default icons;

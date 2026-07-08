@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -35,7 +35,14 @@ import {
   TrendingUp, 
   Bell,
   Sliders,
-  Sparkles
+  Sparkles,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  KeyRound,
+  ArrowLeft,
+  RefreshCw,
+  Mail
 } from 'lucide-react';
 
 export default function AgriScanApp() {
@@ -55,17 +62,47 @@ export default function AgriScanApp() {
     logout,
     onboard,
     refreshAll,
-    markAllNotificationsRead
+    markAllNotificationsRead,
+    verifyEmail,
+    resendVerificationCode,
+    requestPasswordReset,
+    confirmPasswordReset
   } = useAuth();
 
   // Auth screen state
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  type AuthScreen = 'login' | 'signup' | 'verify' | 'forgot' | 'reset';
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
   const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // OTP / Verification state
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [devOtpHint, setDevOtpHint] = useState('');
+
+  // Forgot / Reset password state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtpDigits, setResetOtpDigits] = useState(['', '', '', '', '', '']);
+  const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [newPassword, setNewPassword] = useState('');
+
+  // Password strength checks
+  const pwChecks = {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    lower: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+  const pwStrength = Object.values(pwChecks).filter(Boolean).length;
 
   // Onboarding wizard state
   const [onboardStep, setOnboardStep] = useState(1);
@@ -199,24 +236,146 @@ export default function AgriScanApp() {
     }
   };
 
+  // OTP input handler (shared for verify + reset screens)
+  const handleOtpChange = (
+    digits: string[],
+    setDigits: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+    index: number,
+    value: string
+  ) => {
+    if (!/^[0-9]?$/.test(value)) return;
+    const next = [...digits];
+    next[index] = value;
+    setDigits(next);
+    if (value && index < 5) refs.current[index + 1]?.focus();
+  };
+
+  const handleOtpKeyDown = (
+    digits: string[],
+    setDigits: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      refs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (
+    setDigits: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+    e: React.ClipboardEvent
+  ) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      setDigits(pasted.split(''));
+      refs.current[5]?.focus();
+    }
+  };
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
   // Auth Handler
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setIsSubmitting(true);
 
-    if (authMode === 'login') {
+    if (authScreen === 'login') {
       const res = await login(email, password);
       if (!res.success) {
         setAuthError(res.error || 'Invalid credentials');
       }
-    } else {
-      const res = await signup(email, password, name, accountType);
+    } else if (authScreen === 'signup') {
+      if (!pwChecks.length) {
+        setAuthError('Password must be at least 8 characters.');
+        setIsSubmitting(false);
+        return;
+      }
+      const res = await signup(email, password, name, accountType) as any;
       if (res.success) {
-        setOnboardStep(1); // launch onboarding for new users!
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendCooldown(60);
+        setOnboardStep(1);
+        setAuthScreen('verify');
       } else {
         setAuthError(res.error || 'Signup failed');
       }
+    }
+    setIsSubmitting(false);
+  };
+
+  // Verify OTP
+  const handleVerifyOtp = async () => {
+    const code = otpDigits.join('');
+    if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
+    setAuthError('');
+    setIsSubmitting(true);
+    const res = await verifyEmail(code);
+    if (res.success) {
+      setOnboardStep(1);
+      await refreshAll();
+      setActiveTab('dashboard');
+    } else {
+      setAuthError(res.error || 'Invalid code. Please try again.');
+      setOtpDigits(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
+    }
+    setIsSubmitting(false);
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setAuthError('');
+    const res = await resendVerificationCode() as any;
+    if (res.success) {
+      setResendCooldown(60);
+      setOtpDigits(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
+    } else {
+      setAuthError(res.error || 'Failed to resend code.');
+    }
+  };
+
+  // Request password reset
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsSubmitting(true);
+    const res = await requestPasswordReset(resetEmail) as any;
+    if (res.success) {
+      setResetOtpDigits(['', '', '', '', '', '']);
+      setResendCooldown(60);
+      setAuthScreen('reset');
+    } else {
+      setAuthError(res.error || 'Failed to request reset.');
+    }
+    setIsSubmitting(false);
+  };
+
+  // Confirm password reset
+  const handleConfirmReset = async () => {
+    const code = resetOtpDigits.join('');
+    if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
+    if (newPassword.length < 8) { setAuthError('Password must be at least 8 characters.'); return; }
+    setAuthError('');
+    setIsSubmitting(true);
+    const res = await confirmPasswordReset(resetEmail, code, newPassword);
+    if (res.success) {
+      setAuthSuccess('Password reset successfully! You can now sign in.');
+      setAuthScreen('login');
+      setEmail(resetEmail);
+      setPassword('');
+    } else {
+      setAuthError(res.error || 'Failed to reset password.');
     }
     setIsSubmitting(false);
   };
@@ -600,149 +759,584 @@ export default function AgriScanApp() {
     );
   }
 
-  // --- WELCOME & SIGN IN / SIGN UP SCREENS ---
-  if (!user) {
+  // --- PREMIUM AUTH SCREENS (Login / Signup / Verify / Forgot / Reset) ---
+  // Only show auth screens if user is not logged in OR not verified yet.
+  // If user is verified and has location set (onboarded), skip directly to dashboard.
+  if (!user || (!user.isVerified && !user.location)) {
     return (
-      <div className="min-h-screen bg-stone-50 flex flex-col md:flex-row font-sans">
-        {/* Left Info Column */}
-        <div className="flex-1 bg-emerald-950 text-emerald-50 flex flex-col justify-between p-8 md:p-16 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-900 via-emerald-950 to-stone-950 opacity-90" />
-          
+      <div className="min-h-screen flex flex-col md:flex-row font-sans">
+        {/* ── LEFT BRAND PANEL — 3D animated dark ── */}
+        <div className="hidden md:flex flex-col justify-between w-[480px] shrink-0 p-12 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #0a1f0f 0%, #0d2b1a 60%, #0f1f2e 100%)' }}>
+          {/* Animated floating 3D leaf/globe orbs */}
+          <style>{`
+            @keyframes float3d {
+              0%,100% { transform: translateY(0px) rotateX(0deg) rotateY(0deg); }
+              33% { transform: translateY(-18px) rotateX(8deg) rotateY(10deg); }
+              66% { transform: translateY(-8px) rotateX(-5deg) rotateY(-8deg); }
+            }
+            @keyframes float3d2 {
+              0%,100% { transform: translateY(0px) rotateX(0deg) rotateY(0deg); }
+              33% { transform: translateY(-12px) rotateX(-6deg) rotateY(12deg); }
+              66% { transform: translateY(-22px) rotateX(10deg) rotateY(-5deg); }
+            }
+            @keyframes float3d3 {
+              0%,100% { transform: translateY(0px) rotateX(0deg) rotateY(0deg); }
+              50% { transform: translateY(-14px) rotateX(6deg) rotateY(-10deg); }
+            }
+            @keyframes orbit {
+              0% { transform: rotate(0deg) translateX(90px) rotate(0deg); }
+              100% { transform: rotate(360deg) translateX(90px) rotate(-360deg); }
+            }
+            @keyframes orbit2 {
+              0% { transform: rotate(120deg) translateX(70px) rotate(-120deg); }
+              100% { transform: rotate(480deg) translateX(70px) rotate(-480deg); }
+            }
+            @keyframes orbit3 {
+              0% { transform: rotate(240deg) translateX(110px) rotate(-240deg); }
+              100% { transform: rotate(600deg) translateX(110px) rotate(-600deg); }
+            }
+            @keyframes pulseGlow {
+              0%,100% { opacity: 0.15; transform: scale(1); }
+              50% { opacity: 0.30; transform: scale(1.08); }
+            }
+            @keyframes scanLine {
+              0% { transform: translateY(-100%); opacity: 0; }
+              10% { opacity: 1; }
+              90% { opacity: 1; }
+              100% { transform: translateY(100%); opacity: 0; }
+            }
+            @keyframes particleDrift {
+              0% { transform: translateY(0) translateX(0) scale(1); opacity: 0.7; }
+              100% { transform: translateY(-120px) translateX(20px) scale(0.3); opacity: 0; }
+            }
+          `}</style>
+
+          {/* Background glow blobs */}
+          <div className="absolute inset-0" style={{ perspective: '800px' }}>
+            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)', animation: 'pulseGlow 4s ease-in-out infinite' }} />
+            <div className="absolute bottom-1/4 right-0 w-64 h-64 rounded-full" style={{ background: 'radial-gradient(circle, rgba(52,211,153,0.10) 0%, transparent 70%)', animation: 'pulseGlow 6s ease-in-out infinite 2s' }} />
+            <div className="absolute top-0 left-0 w-48 h-48 rounded-full" style={{ background: 'radial-gradient(circle, rgba(6,95,70,0.25) 0%, transparent 70%)' }} />
+          </div>
+
+          {/* 3D Central Orb + orbiting elements */}
+          <div className="absolute top-[47%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48" style={{ perspective: '600px' }}>
+            {/* Core planet orb */}
+            <div className="w-48 h-48 rounded-full relative" style={{ background: 'radial-gradient(ellipse at 35% 35%, #10b981 0%, #059669 40%, #064e3b 80%, #022c22 100%)', boxShadow: '0 0 60px rgba(16,185,129,0.4), 0 0 120px rgba(16,185,129,0.15), inset -20px -20px 40px rgba(0,0,0,0.5)', animation: 'float3d 7s ease-in-out infinite' }}>
+              {/* Scan line */}
+              <div className="absolute inset-0 rounded-full overflow-hidden">
+                <div style={{ position:'absolute', left:0, right:0, height:'2px', background:'linear-gradient(90deg, transparent, rgba(52,211,153,0.8), transparent)', animation:'scanLine 3s ease-in-out infinite' }} />
+              </div>
+              {/* Grid overlay */}
+              <div className="absolute inset-0 rounded-full" style={{ backgroundImage:'repeating-linear-gradient(0deg, transparent, transparent 18px, rgba(52,211,153,0.08) 18px, rgba(52,211,153,0.08) 19px), repeating-linear-gradient(90deg, transparent, transparent 18px, rgba(52,211,153,0.08) 18px, rgba(52,211,153,0.08) 19px)', borderRadius:'50%' }} />
+              {/* Center icon */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sprout className="h-14 w-14" style={{ color:'rgba(255,255,255,0.9)', filter:'drop-shadow(0 0 12px rgba(52,211,153,0.8))' }} />
+              </div>
+            </div>
+
+            {/* Orbiting particles */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div style={{ position:'absolute', width:'8px', height:'8px', borderRadius:'50%', background:'linear-gradient(135deg,#10b981,#34d399)', boxShadow:'0 0 10px rgba(16,185,129,0.8)', animation:'orbit 5s linear infinite' }} />
+              <div style={{ position:'absolute', width:'6px', height:'6px', borderRadius:'50%', background:'linear-gradient(135deg,#6ee7b7,#10b981)', boxShadow:'0 0 8px rgba(110,231,183,0.8)', animation:'orbit2 7s linear infinite' }} />
+              <div style={{ position:'absolute', width:'10px', height:'10px', borderRadius:'50%', background:'linear-gradient(135deg,#059669,#047857)', boxShadow:'0 0 12px rgba(5,150,105,0.8)', animation:'orbit3 9s linear infinite' }} />
+            </div>
+
+            {/* Orbit ring */}
+            <div className="absolute inset-[-30px] rounded-full" style={{ border:'1px solid rgba(16,185,129,0.15)', transform:'rotateX(70deg)' }} />
+          </div>
+
+          {/* Floating metric cards - top two */}
+          <div className="absolute" style={{ top:'18%', left:'5%', animation:'float3d2 8s ease-in-out infinite 1s' }}>
+            <div className="px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
+              <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Scan Accuracy</span>
+              <span className="block text-xl font-bold font-mono" style={{ color:'#34d399', textShadow:'0 0 12px rgba(52,211,153,0.5)' }}>98.4%</span>
+            </div>
+          </div>
+          <div className="absolute" style={{ top:'15%', right:'4%', animation:'float3d3 9s ease-in-out infinite 2s' }}>
+            <div className="px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
+              <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Farms Protected</span>
+              <span className="block text-xl font-bold font-mono" style={{ color:'#6ee7b7', textShadow:'0 0 12px rgba(110,231,183,0.5)' }}>15K+</span>
+            </div>
+          </div>
+
+          {/* Top logo */}
           <div className="relative z-10">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-emerald-600 rounded-xl shadow-md">
+              <div className="p-2.5 rounded-2xl" style={{ background: 'linear-gradient(135deg, #059669, #047857)', boxShadow:'0 4px 20px rgba(5,150,105,0.4)' }}>
                 <Sprout className="h-7 w-7 text-white" />
               </div>
-              <span className="text-2xl font-semibold tracking-tight font-mono">AgriScan AI</span>
+              <div>
+                <span className="block text-xl font-bold text-white tracking-tight">AgriScan AI</span>
+                <span className="block text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Pathology Intelligence</span>
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 my-12 max-w-lg">
-            <span className="px-3 py-1 bg-emerald-800/60 border border-emerald-700/50 rounded-full text-xs font-mono tracking-wider uppercase text-emerald-300">
-              ⚡ Multi-modal Gemini Engine
-            </span>
-            <h1 className="text-4xl md:text-5xl font-medium tracking-tight text-white mt-4 leading-none">
-              Smart Plant Health Inspection & Pathological Analytics
+          {/* Hero title */}
+          <div className="absolute z-10 left-12 right-12 top-[29%] space-y-3">
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Gemini Multimodal Engine &middot; Live</span>
+            </div>
+            <h1 className="text-3xl font-extrabold text-white leading-tight tracking-tight">
+              Smart Plant<br />
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">Health Intelligence</span>
             </h1>
-            <p className="text-emerald-200/80 mt-6 leading-relaxed text-sm md:text-base">
-              Identify plant diseases instantly with state-of-the-art neural vision analysis. Manage crops, track biological treatment histories, receive localized meteorological spore warnings, and consult pathogenetic agricultural experts.
+          </div>
+
+          {/* Bottom text */}
+          <div className="absolute z-10 left-12 right-12 top-[58%] space-y-4">
+            <div className="hidden items-center space-x-2 px-3 py-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Gemini Multimodal Engine &middot; Live</span>
+            </div>
+            <h1 className="hidden text-3xl font-extrabold text-white leading-tight tracking-tight">
+              Smart Plant<br />
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">Health Intelligence</span>
+            </h1>
+
+            {/* Glowing border card wrapper for the description text — with extra bottom margin so features list breathes */}
+            <p className="text-sm text-stone-200/95 leading-relaxed font-normal">
+              Instant disease diagnosis powered by Google Gemini Vision. Protect your crops before it&apos;s too late.
             </p>
 
-            <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-emerald-800/60 font-mono">
-              <div>
-                <span className="block text-xl font-bold text-emerald-300">98.4%</span>
-                <span className="text-xs text-emerald-200/60">Diagnostics Accuracy</span>
+            <div className="hidden">
+              {[
+                { icon: ShieldCheck, text: 'Bank-grade encrypted auth & OTP verification' },
+                { icon: Sparkles, text: 'AI-powered treatment plans generated instantly' },
+                { icon: CloudSun, text: 'Localized weather & blight spore risk alerts' },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <Icon className="h-3.5 w-3.5 text-emerald-300" />
+                  </div>
+                  <span className="text-sm text-stone-100 font-medium leading-relaxed">{text}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom metric cards — same exact style & size as top floating cards */}
+            <div className="flex items-center justify-between pt-2">
+              <div style={{ animation:'float3d 10s ease-in-out infinite 0.5s' }}>
+                <div className="w-[132px] px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
+                  <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Analysis Time</span>
+                  <span className="block text-xl font-bold font-mono" style={{ color:'#a7f3d0', textShadow:'0 0 12px rgba(167,243,208,0.5)' }}>&lt;3s</span>
+                </div>
               </div>
-              <div>
-                <span className="block text-xl font-bold text-emerald-300">15,000+</span>
-                <span className="text-xs text-emerald-200/60">Farms Protected</span>
+              <div style={{ animation:'float3d2 6s ease-in-out infinite 3s' }}>
+                <div className="w-[132px] px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
+                  <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Diseases</span>
+                  <span className="block text-xl font-bold font-mono" style={{ color:'#34d399', textShadow:'0 0 12px rgba(52,211,153,0.5)' }}>50+</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="relative z-10 text-xs text-emerald-300/40 font-mono">
-            AgriScan AI Professional Workspace Edition © 2026. All rights reserved.
+          <div className="relative z-10 text-[10px] text-emerald-500/30 font-mono text-center">
+            AgriScan AI Professional © 2026. All rights reserved.
           </div>
         </div>
 
-        {/* Right Auth Column */}
-        <div className="flex-1 flex items-center justify-center p-6 md:p-16">
-          <div className="w-full max-w-md bg-white border border-stone-200 p-8 rounded-3xl shadow-sm">
-            <h2 className="text-2xl font-semibold tracking-tight text-stone-950">
-              {authMode === 'login' ? 'Access your nursery' : 'Register farm account'}
-            </h2>
-            <p className="text-sm text-stone-500 mt-2">
-              {authMode === 'login' ? 'Please supply your farm operational credentials.' : 'Set up crop pathogenetic tracking today.'}
-            </p>
+        {/* ── RIGHT AUTH PANEL — white ── */}
+        <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-white">
+          <div className="w-full max-w-md">
 
-            {authError && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-center space-x-2">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{authError}</span>
-              </div>
-            )}
+            <AnimatePresence mode="wait">
 
-            <form onSubmit={handleAuthSubmit} className="mt-6 space-y-4">
-              {authMode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. John Green"
-                    className="mt-1 block w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
+              {/* ── LOGIN SCREEN ── */}
+              {!(user && !user.isVerified) && authScreen === 'login' && (
+                <motion.div
+                  key="login"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="mb-8">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="p-1.5 rounded-lg" style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}>
+                        <Sprout className="h-4 w-4 text-white" />
+                      </div>
+                      <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">AgriScan AI</span>
+                    </div>
+                    <h2 className="text-3xl font-bold text-stone-900 tracking-tight mt-4">Welcome back</h2>
+                    <p className="text-sm text-stone-500 mt-1">Sign in to your farm dashboard</p>
+                  </div>
+
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
+                  {authSuccess && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start space-x-2">
+                      <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="text-xs text-emerald-700">{authSuccess}</span>
+                    </motion.div>
+                  )}
+
+                  <form onSubmit={handleAuthSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                      <input
+                        type="email" required value={email}
+                        onChange={(e) => { setEmail(e.target.value); setAuthError(''); setAuthSuccess(''); }}
+                        placeholder="you@example.com"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Password</label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'} required value={password}
+                          onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
+                          placeholder="••••••••"
+                          className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <div className="mt-1.5 text-right">
+                        <button type="button" onClick={() => { setAuthError(''); setAuthSuccess(''); setResetEmail(email); setAuthScreen('forgot'); }} className="text-xs text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer font-medium">
+                          Forgot password?
+                        </button>
+                      </div>
+                    </div>
+
+                    <button type="submit" disabled={isSubmitting}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-60"
+                      style={{ background: isSubmitting ? '#065f46' : 'linear-gradient(135deg, #059669, #047857)' }}
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><span>Sign In</span><ChevronRight className="h-4 w-4" /></>}
+                    </button>
+                  </form>
+
+                  <div className="mt-6 pt-5 border-t border-stone-100 text-center text-xs text-stone-400">
+                    New to AgriScan?{' '}
+                    <button onClick={() => { setAuthScreen('signup'); setAuthError(''); setAuthSuccess(''); }} className="text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer transition-colors">
+                      Create farm account →
+                    </button>
+                  </div>
+                </motion.div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. operator@agriscan.ai"
-                  className="mt-1 block w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                />
-              </div>
+              {/* ── SIGNUP SCREEN ── */}
+              {!(user && !user.isVerified) && authScreen === 'signup' && (
+                <motion.div
+                  key="signup"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="mb-6">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="p-1.5 rounded-lg" style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}>
+                        <Sprout className="h-4 w-4 text-white" />
+                      </div>
+                      <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">AgriScan AI</span>
+                    </div>
+                    <h2 className="text-3xl font-bold text-stone-900 tracking-tight mt-4">Create account</h2>
+                    <p className="text-sm text-stone-500 mt-1">Set up your farm dashboard today</p>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 block w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                />
-              </div>
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
 
-              {authMode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Operations Category</label>
-                  <select
-                    value={accountType}
-                    onChange={(e: any) => setAccountType(e.target.value)}
-                    className="mt-1 block w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  <form onSubmit={handleAuthSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Full Name</label>
+                      <input type="text" required value={name}
+                        onChange={(e) => { setName(e.target.value); setAuthError(''); }}
+                        placeholder="e.g. John Green"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                      <input type="email" required value={email}
+                        onChange={(e) => { setEmail(e.target.value); setAuthError(''); }}
+                        placeholder="you@example.com"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Password</label>
+                      <div className="relative">
+                        <input type={showPassword ? 'text' : 'password'} required value={password}
+                          onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
+                          placeholder="Min. 8 characters"
+                          className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {/* Password strength bar only */}
+                      {password && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-2">
+                          <div className="flex space-x-1">
+                            {[1,2,3,4,5].map((i) => (
+                              <div key={i} className="flex-1 h-1.5 rounded-full transition-all duration-300" style={{ background: pwStrength >= i ? (pwStrength <= 2 ? '#ef4444' : pwStrength <= 3 ? '#f59e0b' : '#10b981') : '#e5e7eb' }} />
+                            ))}
+                          </div>
+                          <p className="text-[11px] mt-1 font-medium" style={{ color: pwStrength <= 2 ? '#ef4444' : pwStrength <= 3 ? '#f59e0b' : '#059669' }}>
+                            {pwStrength <= 2 ? 'Weak password' : pwStrength <= 3 ? 'Fair password' : pwStrength === 4 ? 'Strong password' : 'Very strong password'}
+                          </p>
+                        </motion.div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Operation Type</label>
+                      <select value={accountType} onChange={(e: any) => setAccountType(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all appearance-none cursor-pointer"
+                        style={{ backgroundImage: 'none' }}
+                      >
+                        <option value="Gardener">🌱 Home / Hobbyist Gardener</option>
+                        <option value="Farmer">🚜 Commercial Farmer</option>
+                        <option value="Nursery">🌿 Farm Dashboard / Nursery Operator</option>
+                        <option value="Agribusiness">🏢 Agribusiness Professional</option>
+                      </select>
+                    </div>
+
+                    <button type="submit" disabled={isSubmitting || pwStrength < 3}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
+                      style={{ background: (isSubmitting || pwStrength < 3) ? '#6b7280' : 'linear-gradient(135deg, #059669, #047857)' }}
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><span>Create Account & Verify Email</span><ChevronRight className="h-4 w-4" /></>}
+                    </button>
+                  </form>
+
+                  <div className="mt-6 pt-5 border-t border-stone-100 text-center text-xs text-stone-400">
+                    Already have an account?{' '}
+                    <button onClick={() => { setAuthScreen('login'); setAuthError(''); }} className="text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer transition-colors">
+                      Sign in →
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── VERIFY EMAIL OTP SCREEN ── */}
+              {((user && !user.isVerified) || authScreen === 'verify') && (
+                <motion.div
+                  key="verify"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 rounded-2xl" style={{ background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.2)' }}>
+                      <Mail className="h-6 w-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Check your inbox</h2>
+                      <p className="text-xs text-stone-500 mt-0.5">Enter the 6-digit code sent to <strong>{email || (user && user.email)}</strong></p>
+                    </div>
+                  </div>
+
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
+
+                  <div className="mb-6">
+                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 text-center">6-digit verification code</label>
+                    <div className="flex items-center justify-center space-x-2">
+                      {otpDigits.map((d, i) => (
+                        <input
+                          key={i}
+                          ref={(el) => { otpRefs.current[i] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={d}
+                          onChange={(e) => handleOtpChange(otpDigits, setOtpDigits, otpRefs, i, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(otpDigits, setOtpDigits, otpRefs, i, e)}
+                          onPaste={(e) => handleOtpPaste(setOtpDigits, otpRefs, e)}
+                          className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none"
+                          style={d ? { background: '#f0fdf4', borderColor: '#059669', color: '#064e3b' } : { background: '#f9fafb', borderColor: '#d1d5db', color: '#111827' }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleVerifyOtp}
+                    disabled={isSubmitting || otpDigits.join('').length < 6}
+                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
                   >
-                    <option value="Gardener">Home / Hobbyist Gardener</option>
-                    <option value="Farmer">Commercial Farmer / Orchardist</option>
-                    <option value="Nursery">Nursery Operator</option>
-                    <option value="Agribusiness">Agribusiness Professional</option>
-                  </select>
-                </div>
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-4 w-4" /><span>Verify & Enter Dashboard</span></>}
+                  </button>
+
+                  <div className="mt-5 flex items-center justify-between text-xs">
+                    <button onClick={async () => { if (user) await logout(); setAuthScreen('signup'); setAuthError(''); setOtpDigits(['','','','','','']); }} className="flex items-center space-x-1 text-stone-400 hover:text-stone-600 cursor-pointer transition-colors">
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      <span>Back</span>
+                    </button>
+                    <button
+                      onClick={handleResendOtp}
+                      disabled={resendCooldown > 0}
+                      className="flex items-center space-x-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${resendCooldown > 0 ? '' : 'hover:rotate-180 transition-transform duration-500'}`} />
+                      <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
+                    </button>
+                  </div>
+                </motion.div>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-sm font-semibold tracking-wide transition-all shadow-sm flex justify-center items-center cursor-pointer"
-              >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : (authMode === 'login' ? 'Sign In' : 'Register and Onboard')}
-              </button>
-            </form>
+              {/* ── FORGOT PASSWORD SCREEN ── */}
+              {!(user && !user.isVerified) && authScreen === 'forgot' && (
+                <motion.div
+                  key="forgot"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <button onClick={() => { setAuthScreen('login'); setAuthError(''); }} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 text-xs mb-6 cursor-pointer transition-colors">
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Back to sign in</span>
+                  </button>
 
-            <div className="mt-6 pt-6 border-t border-stone-150 text-center text-xs text-stone-500 font-sans">
-              {authMode === 'login' ? (
-                <>
-                  New to AgriScan?{' '}
-                  <button onClick={() => setAuthMode('signup')} className="font-semibold text-emerald-700 hover:underline cursor-pointer">
-                    Create farm account
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already registered?{' '}
-                  <button onClick={() => setAuthMode('login')} className="font-semibold text-emerald-700 hover:underline cursor-pointer">
-                    Sign in here
-                  </button>
-                </>
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 rounded-2xl" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
+                      <KeyRound className="h-6 w-6 text-amber-500" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Forgot password?</h2>
+                      <p className="text-xs text-stone-500 mt-0.5">We&apos;ll send a reset code to your email</p>
+                    </div>
+                  </div>
+
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
+
+                  <form onSubmit={handleRequestReset} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Registered Email Address</label>
+                      <input type="email" required value={resetEmail}
+                        onChange={(e) => { setResetEmail(e.target.value); setAuthError(''); }}
+                        placeholder="you@example.com"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
+                      />
+                    </div>
+
+                    <button type="submit" disabled={isSubmitting}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg, #d97706, #b45309)' }}
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Mail className="h-4 w-4" /><span>Send Reset Code</span></>}
+                    </button>
+                  </form>
+                </motion.div>
               )}
-            </div>
+
+              {/* ── RESET PASSWORD SCREEN ── */}
+              {!(user && !user.isVerified) && authScreen === 'reset' && (
+                <motion.div
+                  key="reset"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <button onClick={() => { setAuthScreen('forgot'); setAuthError(''); }} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 text-xs mb-6 cursor-pointer transition-colors">
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Back</span>
+                  </button>
+
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 rounded-2xl" style={{ background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.2)' }}>
+                      <ShieldCheck className="h-6 w-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Reset your password</h2>
+                      <p className="text-xs text-stone-500 mt-0.5">Enter the code sent to <span className="text-emerald-600 font-medium">{resetEmail}</span></p>
+                    </div>
+                  </div>
+
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
+
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 text-center">6-digit reset code</label>
+                      <div className="flex items-center justify-center space-x-2">
+                        {resetOtpDigits.map((d, i) => (
+                          <input
+                            key={i}
+                            ref={(el) => { resetOtpRefs.current[i] = el; }}
+                            type="text" inputMode="numeric" maxLength={1} value={d}
+                            onChange={(e) => handleOtpChange(resetOtpDigits, setResetOtpDigits, resetOtpRefs, i, e.target.value)}
+                            onKeyDown={(e) => handleOtpKeyDown(resetOtpDigits, setResetOtpDigits, resetOtpRefs, i, e)}
+                            onPaste={(e) => handleOtpPaste(setResetOtpDigits, resetOtpRefs, e)}
+                            className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none"
+                            style={d ? { background: '#f0fdf4', borderColor: '#059669', color: '#064e3b' } : { background: '#f9fafb', borderColor: '#d1d5db', color: '#111827' }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">New Password</label>
+                      <div className="relative">
+                        <input type={showNewPassword ? 'text' : 'password'} value={newPassword}
+                          onChange={(e) => { setNewPassword(e.target.value); setAuthError(''); }}
+                          placeholder="Min. 8 characters"
+                          className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                        />
+                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                          {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleConfirmReset}
+                      disabled={isSubmitting || resetOtpDigits.join('').length < 6 || newPassword.length < 8}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-4 w-4" /><span>Reset Password</span></>}
+                    </button>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        onClick={async () => { if (resendCooldown > 0) return; setAuthError(''); const r = await requestPasswordReset(resetEmail) as any; if (r.success) { setResendCooldown(60); } else { setAuthError(r.error || 'Failed.'); } }}
+                        disabled={resendCooldown > 0}
+                        className="flex items-center space-x-1.5 text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                        style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
         </div>
       </div>
@@ -756,7 +1350,7 @@ export default function AgriScanApp() {
         <div className="w-full max-w-lg bg-white border border-stone-200 rounded-3xl shadow-sm p-8">
           <div className="flex items-center space-x-2 font-mono text-xs text-emerald-600 uppercase tracking-widest">
             <Sparkles className="h-4 w-4" />
-            <span>Farm Onboarding Wizard — Step {onboardStep} of 2</span>
+            <span>Farm Dashboard Onboarding — Step {onboardStep} of 2</span>
           </div>
 
           {onboardStep === 1 ? (
@@ -800,7 +1394,7 @@ export default function AgriScanApp() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Nursery/Farm Initial Zone Name</label>
+                  <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Farm Dashboard / Initial Zone Name</label>
                   <input
                     type="text"
                     required
@@ -1198,7 +1792,7 @@ export default function AgriScanApp() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <h1 className="text-2xl font-semibold tracking-tight text-stone-900">My Plants & Crops</h1>
-                        <p className="text-sm text-stone-500 mt-1">Catalog and inspect crops, vines, and nurseries.</p>
+                        <p className="text-sm text-stone-500 mt-1">Catalog and inspect crops, vines, and farm dashboard zones.</p>
                       </div>
                       <button
                         onClick={() => {
