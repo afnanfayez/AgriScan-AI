@@ -7,7 +7,12 @@
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![Gemini AI](https://img.shields.io/badge/Gemini-AI-blue?style=flat-square&logo=google)](https://ai.google.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat-square&logo=supabase)](https://supabase.com/)
+[![Deployed on Netlify](https://img.shields.io/badge/Deployed%20on-Netlify-00C7B7?style=flat-square&logo=netlify)](https://agriscana.netlify.app/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+
+<h4>
+  <a href="https://agriscana.netlify.app/">🌐 Live Application Demo</a>
+</h4>
 
 </div>
 
@@ -16,6 +21,9 @@
 ## 📌 Overview
 
 **AgriScan AI** is a full-stack web application that leverages **Google Gemini's multimodal vision AI** to instantly diagnose plant diseases from photos. It provides a complete environment for managing farms, tracking crop health, and receiving AI-generated treatment plans — eliminating the need to wait for a lab or hire an agronomist.
+
+> [!TIP]
+> **Live Demo:** You can access the deployed application live at **[agriscana.netlify.app](https://agriscana.netlify.app/)**.
 
 > 📸 Photograph the diseased leaf → 🤖 Gemini analyzes it → 💊 Get an instant treatment plan
 

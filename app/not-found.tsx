@@ -8,7 +8,7 @@ export default function NotFound() {
       </div>
       <h1 className="text-2xl font-semibold tracking-tight text-stone-950">Resource Not Found</h1>
       <p className="mt-2 text-xs text-stone-500 max-w-sm leading-relaxed">
-        The nursery layout, crop details, or analytics section you requested could not be resolved.
+        The Farm dashboard layout, crop details, or analytics section you requested could not be resolved.
       </p>
       <Link 
         href="/" 
