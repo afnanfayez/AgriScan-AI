@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, getSupabaseAdminClient } from '@/lib/supabase';
 import { setSessionCookie } from '@/lib/auth';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +14,10 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseServerClient();
     const avatarUrl = `https://picsum.photos/seed/${email.replace(/[^a-zA-Z0-9]/g, '')}/150/150`;
 
+    // Generate random 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+
     const { data, error } = await supabase.auth.signUp({
       email: email.toLowerCase(),
       password,
@@ -21,6 +26,9 @@ export async function POST(req: NextRequest) {
           name,
           account_type: accountType || 'Gardener',
           avatar_url: avatarUrl,
+          is_verified: false,
+          verification_code: verificationCode,
+          verification_expires: codeExpiry
         }
       }
     });
@@ -56,6 +64,13 @@ export async function POST(req: NextRequest) {
       });
     if (notifError) console.error('Error creating welcome notification:', notifError);
 
+    // Send real verification email
+    const emailSent = await sendVerificationEmail(email.toLowerCase(), name, verificationCode);
+    if (!emailSent) {
+      console.warn(`Verification email could not be sent to ${email}. Code logged below.`);
+      console.log(`\n======================================================\n===> SIGNUP OTP FOR ${email}: ${verificationCode}\n======================================================\n`);
+    }
+
     const userObj = {
       id: userId,
       email: email.toLowerCase(),
@@ -65,6 +80,7 @@ export async function POST(req: NextRequest) {
       location: '',
       units: 'metric',
       plan: 'Free',
+      isVerified: false,
     };
 
     const res = NextResponse.json({
@@ -75,7 +91,7 @@ export async function POST(req: NextRequest) {
     if (data.session) {
       setSessionCookie(res, data.session.access_token);
     } else {
-      // In case auto-confirm is off or other cases, attempt auto login to get the access token
+      // Auto login to get the access token
       const { data: signInData } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,

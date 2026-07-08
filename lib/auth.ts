@@ -10,6 +10,7 @@ export interface SupabaseUserProfile {
   location: string;
   units: 'metric' | 'imperial';
   plan: 'Free' | 'Pro' | 'Enterprise';
+  isVerified: boolean;
   token: string;
 }
 
@@ -34,6 +35,8 @@ export async function getSessionUser(req: NextRequest): Promise<SupabaseUserProf
     if (error || !user) {
       return null;
     }
+
+    const isVerified = user.user_metadata?.is_verified ?? false;
     
     // Fetch user profile from public.profiles table
     const { data: profile, error: profileError } = await supabase
@@ -53,6 +56,7 @@ export async function getSessionUser(req: NextRequest): Promise<SupabaseUserProf
         location: '',
         units: 'metric',
         plan: 'Free',
+        isVerified,
         token,
       };
     }
@@ -66,6 +70,7 @@ export async function getSessionUser(req: NextRequest): Promise<SupabaseUserProf
       location: profile.location || '',
       units: profile.units || 'metric',
       plan: profile.plan || 'Free',
+      isVerified,
       token,
     };
   } catch (error) {

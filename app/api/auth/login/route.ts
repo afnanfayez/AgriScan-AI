@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
       .eq('id', data.user.id)
       .single();
 
+    const isVerified = data.user.user_metadata?.is_verified ?? false;
+
     const userObj = {
       id: data.user.id,
       email: data.user.email || '',
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
       location: profile?.location || '',
       units: profile?.units || 'metric',
       plan: profile?.plan || 'Free',
+      isVerified,
     };
 
     const res = NextResponse.json({

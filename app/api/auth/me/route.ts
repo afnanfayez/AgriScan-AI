@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
         location: user.location,
         units: user.units,
         plan: user.plan,
+        isVerified: user.isVerified,
       }
     });
   } catch (error: any) {

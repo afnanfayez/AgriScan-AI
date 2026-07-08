@@ -58,6 +58,10 @@ interface AuthContextType {
   refreshAll: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+  verifyEmail: (code: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerificationCode: () => Promise<{ success: boolean; error?: string; devCode?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string; devCode?: string }>;
+  confirmPasswordReset: (email: string, code: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -215,6 +219,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const verifyEmail = async (code: string) => {
+    try {
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshAll();
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Verification failed' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  const resendVerificationCode = async () => {
+    try {
+      const res = await fetch('/api/auth/verify/resend', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, devCode: data.devCode };
+      }
+      return { success: false, error: data.error || 'Failed to resend code' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    try {
+      const res = await fetch('/api/auth/reset-password/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, devCode: data.devCode };
+      }
+      return { success: false, error: data.error || 'Password reset request failed' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  const confirmPasswordReset = async (email: string, code: string, newPassword: string) => {
+    try {
+      const res = await fetch('/api/auth/reset-password/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Password reset confirmation failed' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -235,6 +306,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshAll,
         refreshNotifications,
         markAllNotificationsRead,
+        verifyEmail,
+        resendVerificationCode,
+        requestPasswordReset,
+        confirmPasswordReset,
       }}
     >
       {children}
