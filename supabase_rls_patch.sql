@@ -74,21 +74,45 @@ CREATE POLICY "Users can update their own profile"
 -- No DELETE policy on profiles intentionally — deletion cascades via auth.users
 
 
+-- ── SECURITY DEFINER FUNCTIONS TO BREAK RECURSION ───────────────────
+-- These functions run with bypass RLS to prevent infinite recursion
+-- when policy logic recursively queries related tables.
+
+CREATE OR REPLACE FUNCTION public.is_farm_member(farm_uuid uuid, user_email text)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.team_members
+    WHERE farm_id = farm_uuid AND email = user_email
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_farm_owner(farm_uuid uuid, user_uuid uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.farms
+    WHERE id = farm_uuid AND user_id = user_uuid
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ── farms ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Users can view farms they own or belong to" ON public.farms;
 DROP POLICY IF EXISTS "Users can insert their own farms" ON public.farms;
 DROP POLICY IF EXISTS "Users can update their own farms" ON public.farms;
 DROP POLICY IF EXISTS "Users can delete their own farms" ON public.farms;
+DROP POLICY IF EXISTS "farms: owner or team member can view" ON public.farms;
+DROP POLICY IF EXISTS "farms: owner can insert" ON public.farms;
+DROP POLICY IF EXISTS "farms: owner can update" ON public.farms;
+DROP POLICY IF EXISTS "farms: owner can delete" ON public.farms;
 
 CREATE POLICY "farms: owner or team member can view"
   ON public.farms FOR SELECT
   USING (
     auth.uid() = user_id
-    OR EXISTS (
-      SELECT 1 FROM public.team_members
-      WHERE farm_id = farms.id
-        AND email = (auth.jwt() ->> 'email')
-    )
+    OR public.is_farm_member(id, auth.jwt() ->> 'email')
   );
 
 CREATE POLICY "farms: owner can insert"
@@ -114,11 +138,7 @@ CREATE POLICY "plants: owner or team member can view"
   ON public.plants FOR SELECT
   USING (
     auth.uid() = user_id
-    OR EXISTS (
-      SELECT 1 FROM public.team_members
-      WHERE farm_id = plants.farm_id
-        AND email = (auth.jwt() ->> 'email')
-    )
+    OR public.is_farm_member(farm_id, auth.jwt() ->> 'email')
   );
 
 CREATE POLICY "plants: owner can insert"
@@ -231,47 +251,27 @@ CREATE POLICY "notifications: owner can delete"
 -- ── team_members ──────────────────────────────────────────
 DROP POLICY IF EXISTS "Farm owners can view team members" ON public.team_members;
 DROP POLICY IF EXISTS "Farm owners can manage team members" ON public.team_members;
+DROP POLICY IF EXISTS "team_members: farm owner can select" ON public.team_members;
+DROP POLICY IF EXISTS "team_members: farm owner can insert" ON public.team_members;
+DROP POLICY IF EXISTS "team_members: farm owner can update" ON public.team_members;
+DROP POLICY IF EXISTS "team_members: farm owner can delete" ON public.team_members;
 
 -- Team members are managed per-farm by the farm owner
 CREATE POLICY "team_members: farm owner can select"
   ON public.team_members FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.farms
-      WHERE farms.id = team_members.farm_id
-        AND farms.user_id = auth.uid()
-    )
-  );
+  USING (public.is_farm_owner(farm_id, auth.uid()));
 
 CREATE POLICY "team_members: farm owner can insert"
   ON public.team_members FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.farms
-      WHERE farms.id = team_members.farm_id
-        AND farms.user_id = auth.uid()
-    )
-  );
+  WITH CHECK (public.is_farm_owner(farm_id, auth.uid()));
 
 CREATE POLICY "team_members: farm owner can update"
   ON public.team_members FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.farms
-      WHERE farms.id = team_members.farm_id
-        AND farms.user_id = auth.uid()
-    )
-  );
+  USING (public.is_farm_owner(farm_id, auth.uid()));
 
 CREATE POLICY "team_members: farm owner can delete"
   ON public.team_members FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.farms
-      WHERE farms.id = team_members.farm_id
-        AND farms.user_id = auth.uid()
-    )
-  );
+  USING (public.is_farm_owner(farm_id, auth.uid()));
 
 
 -- ── forum_posts ───────────────────────────────────────────
@@ -349,6 +349,10 @@ CREATE POLICY "diseases_reference: anyone can view"
   ON public.diseases_reference FOR SELECT
   USING (true);
 
+-- ── pending_signups (no public access, managed by service_role) ──
+ALTER TABLE public.pending_signups ENABLE ROW LEVEL SECURITY;
+REVOKE INSERT, UPDATE, DELETE, SELECT ON public.pending_signups FROM anon;
+REVOKE INSERT, UPDATE, DELETE, SELECT ON public.pending_signups FROM authenticated;
 
 -- ────────────────────────────────────────────────────────────
 -- STEP 3: VERIFY CURRENT POLICY STATE

@@ -139,6 +139,19 @@ create table public.diseases_reference (
     chemical_treatments text[] not null
 );
 
+-- 13. PENDING SIGNUPS TABLE (Temporary storage before email verification)
+create table public.pending_signups (
+    id uuid default uuid_generate_v4() primary key,
+    email text not null unique,
+    password text not null,
+    name text not null,
+    account_type text not null,
+    avatar_url text,
+    code text not null,
+    expires_at timestamp with time zone not null,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- ENABLE ROW LEVEL SECURITY (RLS) ON ALL TABLES
 alter table public.profiles enable row level security;
 alter table public.farms enable row level security;
@@ -152,6 +165,29 @@ alter table public.forum_posts enable row level security;
 alter table public.forum_comments enable row level security;
 alter table public.expert_reviews enable row level security;
 alter table public.diseases_reference enable row level security;
+alter table public.pending_signups enable row level security;
+
+-- SECURITY DEFINER FUNCTIONS TO BREAK RECURSION
+-- Bypasses RLS scope to allow clean relations checks without infinite recursion.
+create or replace function public.is_farm_member(farm_uuid uuid, user_email text)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.team_members
+    where farm_id = farm_uuid and email = user_email
+  );
+end;
+$$ language plpgsql security definer;
+
+create or replace function public.is_farm_owner(farm_uuid uuid, user_uuid uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.farms
+    where id = farm_uuid and user_id = user_uuid
+  );
+end;
+$$ language plpgsql security definer;
 
 -- ROW LEVEL SECURITY POLICIES
 
@@ -161,7 +197,7 @@ create policy "Users can update their own profile" on public.profiles for update
 
 -- farms (Owner can read/write, team members of farm can view)
 create policy "Users can view farms they own or belong to" on public.farms for select
-using (auth.uid() = user_id or exists (select 1 from public.team_members where farm_id = id and email = auth.jwt()->>'email'));
+using (auth.uid() = user_id or public.is_farm_member(id, auth.jwt()->>'email'));
 
 create policy "Users can insert their own farms" on public.farms for insert with check (auth.uid() = user_id);
 create policy "Users can update their own farms" on public.farms for update using (auth.uid() = user_id);
@@ -169,7 +205,7 @@ create policy "Users can delete their own farms" on public.farms for delete usin
 
 -- plants
 create policy "Users can view plants they own or have farm access to" on public.plants for select
-using (auth.uid() = user_id or exists (select 1 from public.team_members where farm_id = farm_id and email = auth.jwt()->>'email'));
+using (auth.uid() = user_id or public.is_farm_member(farm_id, auth.jwt()->>'email'));
 
 create policy "Users can insert their own plants" on public.plants for insert with check (auth.uid() = user_id);
 create policy "Users can update their own plants" on public.plants for update using (auth.uid() = user_id);
@@ -209,6 +245,12 @@ create policy "Users can request expert reviews" on public.expert_reviews for in
 
 -- diseases reference (Read-only for all signed in users)
 create policy "Anyone can view diseases reference" on public.diseases_reference for select using (true);
+
+-- team members (managed by farm owner)
+create policy "team_members: farm owner can select" on public.team_members for select using (public.is_farm_owner(farm_id, auth.uid()));
+create policy "team_members: farm owner can insert" on public.team_members for insert with check (public.is_farm_owner(farm_id, auth.uid()));
+create policy "team_members: farm owner can update" on public.team_members for update using (public.is_farm_owner(farm_id, auth.uid()));
+create policy "team_members: farm owner can delete" on public.team_members for delete using (public.is_farm_owner(farm_id, auth.uid()));
 
 -- PROFILE AUTO-CREATION TRIGGER
 -- Automatically creates a profile record in public.profiles when a user signs up
