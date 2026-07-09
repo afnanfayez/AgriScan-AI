@@ -58,10 +58,11 @@ interface AuthContextType {
   refreshAll: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
-  verifyEmail: (code: string) => Promise<{ success: boolean; error?: string }>;
-  resendVerificationCode: () => Promise<{ success: boolean; error?: string; devCode?: string }>;
-  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string; devCode?: string }>;
-  confirmPasswordReset: (email: string, code: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  verifyEmail: (code: string, email?: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerificationCode: (email?: string) => Promise<{ success: boolean; error?: string; devCode?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyResetCode: (email: string, code: string) => Promise<{ success: boolean; error?: string; verifiedToken?: string }>;
+  confirmPasswordReset: (email: string, verifiedToken: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -219,12 +220,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const verifyEmail = async (code: string) => {
+  const verifyEmail = async (code: string, email?: string) => {
     try {
       const res = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -237,10 +238,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resendVerificationCode = async () => {
+  const resendVerificationCode = async (email?: string) => {
     try {
       const res = await fetch('/api/auth/verify/resend', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -261,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        return { success: true, devCode: data.devCode };
+        return { success: true };
       }
       return { success: false, error: data.error || 'Password reset request failed' };
     } catch (err: any) {
@@ -269,15 +272,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const confirmPasswordReset = async (email: string, code: string, newPassword: string) => {
+  /** Step 2: validate OTP only — returns verifiedToken for confirm step */
+  const verifyResetCode = async (email: string, code: string) => {
+    try {
+      const res = await fetch('/api/auth/reset-password/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, verifiedToken: data.verifiedToken };
+      }
+      return { success: false, error: data.error || 'Invalid or expired code' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  /** Step 3: set new password using verifiedToken — auto-logs user in */
+  const confirmPasswordReset = async (email: string, verifiedToken: string, newPassword: string) => {
     try {
       const res = await fetch('/api/auth/reset-password/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, newPassword }),
+        body: JSON.stringify({ email, verifiedToken, newPassword }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        // Refresh user state so they land on dashboard automatically
+        await refreshAll();
         return { success: true };
       }
       return { success: false, error: data.error || 'Password reset confirmation failed' };
@@ -309,6 +333,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         verifyEmail,
         resendVerificationCode,
         requestPasswordReset,
+        verifyResetCode,
         confirmPasswordReset,
       }}
     >

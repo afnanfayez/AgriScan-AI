@@ -66,11 +66,14 @@ export default function AgriScanApp() {
     verifyEmail,
     resendVerificationCode,
     requestPasswordReset,
+    verifyResetCode,
     confirmPasswordReset
   } = useAuth();
 
   // Auth screen state
-  type AuthScreen = 'login' | 'signup' | 'verify' | 'forgot' | 'reset';
+  // 'reset-otp'    = enter the OTP code received by email
+  // 'reset-newpass'= enter the new password (after OTP confirmed)
+  type AuthScreen = 'login' | 'signup' | 'verify' | 'forgot' | 'reset-otp' | 'reset-newpass';
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -93,6 +96,7 @@ export default function AgriScanApp() {
   const [resetOtpDigits, setResetOtpDigits] = useState(['', '', '', '', '', '']);
   const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [newPassword, setNewPassword] = useState('');
+  const [resetVerifiedToken, setResetVerifiedToken] = useState(''); // token from verify step
 
   // Password strength checks
   const pwChecks = {
@@ -318,7 +322,7 @@ export default function AgriScanApp() {
     if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
     setAuthError('');
     setIsSubmitting(true);
-    const res = await verifyEmail(code);
+    const res = await verifyEmail(code, email);
     if (res.success) {
       setOnboardStep(1);
       await refreshAll();
@@ -335,7 +339,7 @@ export default function AgriScanApp() {
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return;
     setAuthError('');
-    const res = await resendVerificationCode() as any;
+    const res = await resendVerificationCode(email) as any;
     if (res.success) {
       setResendCooldown(60);
       setOtpDigits(['', '', '', '', '', '']);
@@ -345,7 +349,7 @@ export default function AgriScanApp() {
     }
   };
 
-  // Request password reset
+  // Request password reset — sends OTP email, moves to OTP screen
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -354,26 +358,43 @@ export default function AgriScanApp() {
     if (res.success) {
       setResetOtpDigits(['', '', '', '', '', '']);
       setResendCooldown(60);
-      setAuthScreen('reset');
+      setAuthScreen('reset-otp'); // ← Step 2: Enter OTP
     } else {
       setAuthError(res.error || 'Failed to request reset.');
     }
     setIsSubmitting(false);
   };
 
-  // Confirm password reset
-  const handleConfirmReset = async () => {
+  // Step 2: Verify reset OTP — moves to new password screen
+  const handleVerifyResetOtp = async () => {
     const code = resetOtpDigits.join('');
     if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
+    setAuthError('');
+    setIsSubmitting(true);
+    const res = await verifyResetCode(resetEmail, code) as any;
+    if (res.success) {
+      setResetVerifiedToken(res.verifiedToken);
+      setNewPassword('');
+      setAuthScreen('reset-newpass'); // ← Step 3: Enter new password
+    } else {
+      setAuthError(res.error || 'Invalid code. Please try again.');
+      setResetOtpDigits(['', '', '', '', '', '']);
+      resetOtpRefs.current[0]?.focus();
+    }
+    setIsSubmitting(false);
+  };
+
+  // Step 3: Set new password — auto-logs user in after success
+  const handleConfirmReset = async () => {
     if (newPassword.length < 8) { setAuthError('Password must be at least 8 characters.'); return; }
     setAuthError('');
     setIsSubmitting(true);
-    const res = await confirmPasswordReset(resetEmail, code, newPassword);
+    const res = await confirmPasswordReset(resetEmail, resetVerifiedToken, newPassword);
     if (res.success) {
-      setAuthSuccess('Password reset successfully! You can now sign in.');
-      setAuthScreen('login');
-      setEmail(resetEmail);
-      setPassword('');
+      // confirmPasswordReset already calls refreshAll() → user is logged in → dashboard
+      setAuthSuccess('Password reset successfully! Welcome back.');
+      setNewPassword('');
+      setResetVerifiedToken('');
     } else {
       setAuthError(res.error || 'Failed to reset password.');
     }
@@ -845,20 +866,6 @@ export default function AgriScanApp() {
             <div className="absolute inset-[-30px] rounded-full" style={{ border:'1px solid rgba(16,185,129,0.15)', transform:'rotateX(70deg)' }} />
           </div>
 
-          {/* Floating metric cards - top two */}
-          <div className="absolute" style={{ top:'18%', left:'5%', animation:'float3d2 8s ease-in-out infinite 1s' }}>
-            <div className="px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-              <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Scan Accuracy</span>
-              <span className="block text-xl font-bold font-mono" style={{ color:'#34d399', textShadow:'0 0 12px rgba(52,211,153,0.5)' }}>98.4%</span>
-            </div>
-          </div>
-          <div className="absolute" style={{ top:'15%', right:'4%', animation:'float3d3 9s ease-in-out infinite 2s' }}>
-            <div className="px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-              <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Farms Protected</span>
-              <span className="block text-xl font-bold font-mono" style={{ color:'#6ee7b7', textShadow:'0 0 12px rgba(110,231,183,0.5)' }}>15K+</span>
-            </div>
-          </div>
-
           {/* Top logo */}
           <div className="relative z-10">
             <div className="flex items-center space-x-3">
@@ -915,21 +922,6 @@ export default function AgriScanApp() {
               ))}
             </div>
 
-            {/* Bottom metric cards — same exact style & size as top floating cards */}
-            <div className="flex items-center justify-between pt-2">
-              <div style={{ animation:'float3d 10s ease-in-out infinite 0.5s' }}>
-                <div className="w-[132px] px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-                  <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Analysis Time</span>
-                  <span className="block text-xl font-bold font-mono" style={{ color:'#a7f3d0', textShadow:'0 0 12px rgba(167,243,208,0.5)' }}>&lt;3s</span>
-                </div>
-              </div>
-              <div style={{ animation:'float3d2 6s ease-in-out infinite 3s' }}>
-                <div className="w-[132px] px-3 py-2 rounded-xl backdrop-blur-md" style={{ background:'rgba(5,150,105,0.15)', border:'1px solid rgba(16,185,129,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-                  <span className="block text-[10px] font-mono text-emerald-300 uppercase tracking-wider">Diseases</span>
-                  <span className="block text-xl font-bold font-mono" style={{ color:'#34d399', textShadow:'0 0 12px rgba(52,211,153,0.5)' }}>50+</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="relative z-10 text-[10px] text-emerald-500/30 font-mono text-center">
@@ -1249,9 +1241,10 @@ export default function AgriScanApp() {
               )}
 
               {/* ── RESET PASSWORD SCREEN ── */}
-              {!(user && !user.isVerified) && authScreen === 'reset' && (
+              {/* ── RESET STEP 2: Enter OTP ── */}
+              {!(user && !user.isVerified) && authScreen === 'reset-otp' && (
                 <motion.div
-                  key="reset"
+                  key="reset-otp"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -1264,11 +1257,11 @@ export default function AgriScanApp() {
 
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 rounded-2xl" style={{ background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.2)' }}>
-                      <ShieldCheck className="h-6 w-6 text-emerald-600" />
+                      <Mail className="h-6 w-6 text-emerald-600" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Reset your password</h2>
-                      <p className="text-xs text-stone-500 mt-0.5">Enter the code sent to <span className="text-emerald-600 font-medium">{resetEmail}</span></p>
+                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Check your email</h2>
+                      <p className="text-xs text-stone-500 mt-0.5">Enter the 6-digit code sent to <span className="text-emerald-600 font-medium">{resetEmail}</span></p>
                     </div>
                   </div>
 
@@ -1298,6 +1291,57 @@ export default function AgriScanApp() {
                       </div>
                     </div>
 
+                    <button
+                      onClick={handleVerifyResetOtp}
+                      disabled={isSubmitting || resetOtpDigits.join('').length < 6}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-4 w-4" /><span>Verify Code</span></>}
+                    </button>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        onClick={async () => { if (resendCooldown > 0) return; setAuthError(''); const r = await requestPasswordReset(resetEmail) as any; if (r.success) { setResendCooldown(60); setResetOtpDigits(['', '', '', '', '', '']); resetOtpRefs.current[0]?.focus(); } else { setAuthError(r.error || 'Failed.'); } }}
+                        disabled={resendCooldown > 0}
+                        className="flex items-center space-x-1.5 text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                        style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── RESET STEP 3: Set New Password ── */}
+              {!(user && !user.isVerified) && authScreen === 'reset-newpass' && (
+                <motion.div
+                  key="reset-newpass"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 rounded-2xl" style={{ background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.2)' }}>
+                      <ShieldCheck className="h-6 w-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-stone-900 tracking-tight">Set new password</h2>
+                      <p className="text-xs text-stone-500 mt-0.5">Code verified ✅ — Choose a strong new password</p>
+                    </div>
+                  </div>
+
+                  {authError && (
+                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <span className="text-xs text-red-600">{authError}</span>
+                    </motion.div>
+                  )}
+
+                  <div className="space-y-5">
                     <div>
                       <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">New Password</label>
                       <div className="relative">
@@ -1310,28 +1354,19 @@ export default function AgriScanApp() {
                           {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
+                      {newPassword.length > 0 && newPassword.length < 8 && (
+                        <p className="text-xs text-red-500 mt-1.5">Password must be at least 8 characters.</p>
+                      )}
                     </div>
 
                     <button
                       onClick={handleConfirmReset}
-                      disabled={isSubmitting || resetOtpDigits.join('').length < 6 || newPassword.length < 8}
+                      disabled={isSubmitting || newPassword.length < 8}
                       className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
                       style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
                     >
-                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-4 w-4" /><span>Reset Password</span></>}
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><KeyRound className="h-4 w-4" /><span>Save & Sign In</span></>}
                     </button>
-
-                    <div className="flex items-center justify-end">
-                      <button
-                        onClick={async () => { if (resendCooldown > 0) return; setAuthError(''); const r = await requestPasswordReset(resetEmail) as any; if (r.success) { setResendCooldown(60); } else { setAuthError(r.error || 'Failed.'); } }}
-                        disabled={resendCooldown > 0}
-                        className="flex items-center space-x-1.5 text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
-                        style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
-                      </button>
-                    </div>
                   </div>
                 </motion.div>
               )}

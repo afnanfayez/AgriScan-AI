@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     // Send real email
     const emailSent = await sendPasswordResetEmail(normalizedEmail, resetCode);
     if (!emailSent) {
-      console.warn(`Password reset email failed for ${normalizedEmail}. Code: ${resetCode}`);
+      console.error(`Password reset email failed for ${normalizedEmail}. Code: ${resetCode}`);
+      return NextResponse.json({ error: 'Failed to send password reset email. Please check your SMTP configuration.' }, { status: 500 });
     }
 
     return NextResponse.json({
