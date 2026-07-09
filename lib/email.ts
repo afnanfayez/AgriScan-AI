@@ -1,31 +1,50 @@
 import nodemailer from 'nodemailer';
 
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || `"AgriScan AI" <${SMTP_USER}>`;
-
-// Create NodeMailer transporter using Gmail SMTP service
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-});
-
 const APP_NAME = 'AgriScan AI';
+
+/**
+ * Creates a fresh Nodemailer transporter on every call.
+ * This prevents stale/empty credentials being captured at module load time
+ * (which can happen on cold starts in serverless environments like Cloud Run).
+ */
+function createTransporter() {
+  const user = process.env.SMTP_USER || '';
+  const pass = process.env.SMTP_PASS || '';
+  return {
+    user,
+    pass,
+    from: process.env.SMTP_FROM || `"AgriScan AI" <${user}>`,
+    // Use port 587 + STARTTLS instead of port 465 (SSL).
+    // Port 465 is often blocked by ISPs/firewalls — 587 is the modern standard.
+    transport: nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,        // false = STARTTLS (upgrades to TLS after handshake)
+      requireTLS: true,     // Fail if server doesn't support TLS upgrade
+      auth: { user, pass },
+      tls: {
+        rejectUnauthorized: true,   // Enforce valid TLS certificate
+      },
+      connectionTimeout: 10000,    // 10s connection timeout
+      socketTimeout: 15000,        // 15s socket timeout
+    }),
+  };
+}
+
+
 
 /** Sends an email verification OTP */
 export async function sendVerificationEmail(toEmail: string, userName: string, code: string): Promise<boolean> {
+  const { user, pass, from, transport } = createTransporter();
   try {
-    if (!SMTP_USER || !SMTP_PASS) {
+    if (!user || !pass) {
       console.warn('SMTP credentials are missing. Logged OTP code below instead.');
       console.log(`\n======================================================\n===> SIGNUP OTP FOR ${toEmail}: ${code}\n======================================================\n`);
       return false;
     }
 
-    await transporter.sendMail({
-      from: SMTP_FROM,
+    await transport.sendMail({
+      from,
       to: toEmail,
       subject: `${code} — Verify your ${APP_NAME} account`,
       html: buildVerificationEmailHtml(userName, code),
@@ -40,15 +59,16 @@ export async function sendVerificationEmail(toEmail: string, userName: string, c
 
 /** Sends a password reset OTP */
 export async function sendPasswordResetEmail(toEmail: string, code: string): Promise<boolean> {
+  const { user, pass, from, transport } = createTransporter();
   try {
-    if (!SMTP_USER || !SMTP_PASS) {
+    if (!user || !pass) {
       console.warn('SMTP credentials are missing. Logged Reset OTP code below instead.');
       console.log(`\n======================================================\n===> RESET OTP FOR ${toEmail}: ${code}\n======================================================\n`);
       return false;
     }
 
-    await transporter.sendMail({
-      from: SMTP_FROM,
+    await transport.sendMail({
+      from,
       to: toEmail,
       subject: `${code} — Reset your ${APP_NAME} password`,
       html: buildPasswordResetEmailHtml(toEmail, code),
