@@ -1,47 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth';
 import { getSupabaseAdminClient } from '@/lib/supabase';
 import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getSessionUser(req);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized. Please log in first.' }, { status: 401 });
-    }
-
     const adminClient = getSupabaseAdminClient();
+    const body = await req.json().catch(() => ({}));
+    const email = typeof body.email === 'string' ? body.email.toLowerCase().trim() : '';
 
-    // Fetch the full user data from Supabase Auth admin to get metadata
-    const { data: userData, error: fetchError } = await adminClient.auth.admin.getUserById(user.id);
-    if (fetchError || !userData?.user) {
-      return NextResponse.json({ error: 'Failed to retrieve user data.' }, { status: 500 });
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required to resend verification code.' }, { status: 400 });
     }
 
-    const meta = userData.user.user_metadata || {};
+    // Retrieve the user from pending_signups table
+    const { data: pendingData, error: fetchError } = await adminClient
+      .from('pending_signups')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (fetchError || !pendingData) {
+      return NextResponse.json({ error: 'No pending registration found for this email. Please sign up first.' }, { status: 400 });
+    }
 
     // Generate a new 6-digit code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const codeExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
 
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(user.id, {
-      user_metadata: {
-        ...meta,
-        is_verified: false,
-        verification_code: verificationCode,
-        verification_expires: codeExpiry,
-      }
-    });
+    // Update the pending signup record with the new code and expiry
+    const { error: updateError } = await adminClient
+      .from('pending_signups')
+      .update({
+        code: verificationCode,
+        expires_at: codeExpiry,
+      })
+      .eq('email', email);
 
     if (updateError) {
+      console.error('Failed to update resend code:', updateError);
       return NextResponse.json({ error: 'Failed to generate new verification code.' }, { status: 500 });
     }
 
-    // Send real email
-    const userName = meta.name || user.email?.split('@')[0] || 'User';
-    const emailSent = await sendVerificationEmail(user.email, userName, verificationCode);
+    // Send the verification email
+    const userName = pendingData.name || email.split('@')[0];
+    const emailSent = await sendVerificationEmail(email, userName, verificationCode);
     if (!emailSent) {
-      console.warn(`Resend verification email failed for ${user.email}. Code: ${verificationCode}`);
+      console.error(`Resend verification email failed for ${email}. Code: ${verificationCode}`);
+      return NextResponse.json({ error: 'Failed to send verification email. Please check your SMTP configuration.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'A new verification code has been sent to your email.' });
