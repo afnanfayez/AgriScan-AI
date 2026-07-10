@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-context';
+import DashboardShell from '@/components/dashboard/dashboard-shell';
+import { ROLE_CONFIG } from '@/components/dashboard/role-config';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sprout,
@@ -16,7 +18,6 @@ import {
   FileText,
   CloudSun,
   User,
-  LogOut,
   Search,
   Plus,
   Loader2,
@@ -29,12 +30,8 @@ import {
   MessageSquare,
   Award,
   Clock,
-  Thermometer,
-  Droplets,
   Wind,
-  MapPin,
   TrendingUp,
-  Bell,
   Sliders,
   Sparkles,
 } from 'lucide-react';
@@ -90,7 +87,16 @@ export default function DashboardPage() {
   // Plant Detail state
   const [plantNotes, setPlantNotes] = useState<any[]>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNotePhoto, setNewNotePhoto] = useState<string | null>(null);
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // Care Reminders state (Hobbyist Gardener feature, available on any plant)
+  const [plantReminders, setPlantReminders] = useState<any[]>([]);
+  const [gardenReminders, setGardenReminders] = useState<any[]>([]);
+  const [newReminderType, setNewReminderType] = useState<'Watering' | 'Fertilizing' | 'Pruning' | 'Repotting' | 'Pest Check' | 'Custom'>('Watering');
+  const [newReminderDueDate, setNewReminderDueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newReminderRecurringDays, setNewReminderRecurringDays] = useState('');
+  const [isAddingReminder, setIsAddingReminder] = useState(false);
 
   // AI Scan Lab state
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -119,6 +125,7 @@ export default function DashboardPage() {
   const [settingsLocation, setSettingsLocation] = useState('');
   const [settingsUnits, setSettingsUnits] = useState<'metric' | 'imperial'>('metric');
   const [settingsPlan, setSettingsPlan] = useState<'Free' | 'Pro' | 'Enterprise'>('Free');
+  const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
 
@@ -147,11 +154,12 @@ export default function DashboardPage() {
         setSettingsLocation(user.location || '');
         setSettingsUnits(user.units || 'metric');
         setSettingsPlan(user.plan || 'Free');
+        setSettingsAccountType(user.accountType || 'Gardener');
       }, 0);
     }
   }, [user]);
 
-  // Fetch plant notes when detail plant is selected
+  // Fetch plant notes + care reminders when detail plant is selected
   useEffect(() => {
     if (selectedPlantId) {
       setTimeout(() => {
@@ -160,9 +168,27 @@ export default function DashboardPage() {
           .then((data) => {
             if (data.success) setPlantNotes(data.notes);
           });
+        fetch(`/api/care-reminders?plantId=${selectedPlantId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) setPlantReminders(data.reminders);
+          });
       }, 0);
     }
   }, [selectedPlantId]);
+
+  // Fetch upcoming garden-wide reminders for the Gardener "My Garden" overview widget
+  useEffect(() => {
+    if (user?.accountType === 'Gardener') {
+      setTimeout(() => {
+        fetch('/api/care-reminders?upcomingOnly=true')
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) setGardenReminders(data.reminders);
+          });
+      }, 0);
+    }
+  }, [user?.accountType, plantReminders]);
 
   // Fetch forum posts
   useEffect(() => {
@@ -256,7 +282,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Save custom plant note
+  // Save custom plant note (with optional photo journal attachment)
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteContent.trim() || !selectedPlantId) return;
@@ -266,11 +292,12 @@ export default function DashboardPage() {
       const res = await fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plantId: selectedPlantId, content: newNoteContent }),
+        body: JSON.stringify({ plantId: selectedPlantId, content: newNoteContent, photo: newNotePhoto }),
       });
       const data = await res.json();
       if (data.success) {
         setNewNoteContent('');
+        setNewNotePhoto(null);
         // Refetch notes
         const notesRes = await fetch(`/api/notes?plantId=${selectedPlantId}`);
         const notesData = await notesRes.json();
@@ -280,6 +307,70 @@ export default function DashboardPage() {
       console.error('Failed to save note:', error);
     } finally {
       setIsSavingNote(false);
+    }
+  };
+
+  // Photo journal file picker -> base64
+  const handleNotePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setNewNotePhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // Add a care reminder for the currently selected plant
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlantId) return;
+
+    setIsAddingReminder(true);
+    try {
+      const res = await fetch('/api/care-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plantId: selectedPlantId,
+          reminderType: newReminderType,
+          dueDate: newReminderDueDate,
+          recurringDays: newReminderRecurringDays ? Number(newReminderRecurringDays) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewReminderRecurringDays('');
+        const remindersRes = await fetch(`/api/care-reminders?plantId=${selectedPlantId}`);
+        const remindersData = await remindersRes.json();
+        if (remindersData.success) setPlantReminders(remindersData.reminders);
+      }
+    } catch (error) {
+      console.error('Failed to add care reminder:', error);
+    } finally {
+      setIsAddingReminder(false);
+    }
+  };
+
+  // Mark a care reminder done (server auto-schedules the next occurrence if recurring)
+  const handleCompleteReminder = async (id: string) => {
+    try {
+      const res = await fetch('/api/care-reminders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, completed: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (selectedPlantId) {
+          const remindersRes = await fetch(`/api/care-reminders?plantId=${selectedPlantId}`);
+          const remindersData = await remindersRes.json();
+          if (remindersData.success) setPlantReminders(remindersData.reminders);
+        }
+        const gardenRes = await fetch('/api/care-reminders?upcomingOnly=true');
+        const gardenData = await gardenRes.json();
+        if (gardenData.success) setGardenReminders(gardenData.reminders);
+      }
+    } catch (error) {
+      console.error('Failed to complete care reminder:', error);
     }
   };
 
@@ -542,7 +633,8 @@ export default function DashboardPage() {
           name: settingsName,
           location: settingsLocation,
           units: settingsUnits,
-          plan: settingsPlan
+          plan: settingsPlan,
+          accountType: settingsAccountType
         })
       });
       const data = await res.json();
@@ -721,117 +813,22 @@ export default function DashboardPage() {
   }
 
   // --- MAIN AUTHENTICATED WORKSPACE PANEL ---
+  const roleConfig = ROLE_CONFIG[user.accountType as keyof typeof ROLE_CONFIG] || ROLE_CONFIG.Gardener;
+
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col font-sans text-stone-800">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center space-x-3">
-          <div className="p-1.5 bg-emerald-600 rounded-lg text-white">
-            <Sprout className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight text-stone-900 font-mono">AgriScan AI</span>
-          <span className="hidden sm:inline px-2 py-0.5 bg-stone-100 text-[10px] text-stone-500 font-mono rounded border uppercase">
-            {user.plan} Active Plan
-          </span>
-        </div>
-
-        {/* Localized Weather strip */}
-        <div className="hidden lg:flex items-center space-x-6 text-xs text-stone-500 border-l border-r border-stone-200 px-6 mx-6">
-          <div className="flex items-center space-x-2">
-            <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-            <span className="font-semibold text-stone-800">{user.location}</span>
-          </div>
-          {weatherData && (
-            <>
-              <div className="flex items-center space-x-2">
-                <Thermometer className="h-3.5 w-3.5 text-orange-500" />
-                <span>Temp: <strong className="text-stone-800">{weatherData.current.temp}{weatherData.current.unit}</strong></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Droplets className="h-3.5 w-3.5 text-blue-500" />
-                <span>Moisture: <strong className="text-stone-800">{weatherData.current.soilMoisture}</strong></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                <span>Blight Spore Risk: <strong className={`uppercase ${weatherData.current.blightRisk === 'High' ? 'text-red-600' : 'text-stone-700'}`}>{weatherData.current.blightRisk}</strong></span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* User profile details, Notifications icon */}
-        <div className="flex items-center space-x-4">
-          {/* Notifications Trigger */}
-          <button
-            onClick={() => {
-              setShowNotifDrawer(!showNotifDrawer);
-              if (!showNotifDrawer) markAllNotificationsRead();
-            }}
-            className="p-2 text-stone-500 hover:bg-stone-100 rounded-xl relative cursor-pointer"
-          >
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 h-4 w-4 bg-red-600 rounded-full text-[9px] text-white flex items-center justify-center font-bold font-mono">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* User Meta info */}
-          <div className="flex items-center space-x-3">
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              className="h-8 w-8 rounded-full border border-stone-200"
-            />
-            <div className="hidden md:block text-left text-xs">
-              <p className="font-semibold text-stone-900">{user.name}</p>
-              <p className="text-stone-400 capitalize">{user.accountType}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={async () => { await logout(); router.push('/login'); }}
-            className="p-2 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-xl cursor-pointer"
-            title="Log Out"
-          >
-            <LogOut className="h-5 w-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Panel Body */}
-      <div className="flex-1 flex flex-col md:flex-row">
-        {/* Sidebar Navigation */}
-        <nav className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-stone-200 p-4 flex flex-row md:flex-col space-y-0 md:space-y-1.5 overflow-x-auto md:overflow-x-visible">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: CloudSun },
-            { id: 'plants', label: 'My Plants / Crops', icon: Sprout },
-            { id: 'scan', label: 'AI Scan Lab', icon: Camera, accent: true },
-            { id: 'treatments', label: 'Treatments', icon: Heart },
-            { id: 'community', label: 'Community Board', icon: Users },
-            { id: 'settings', label: 'Settings', icon: Settings },
-          ].map((tab) => {
-            const IconComponent = tab.icon;
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setSelectedPlantId(null);
-                }}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide font-sans cursor-pointer transition-all whitespace-nowrap md:w-full ${isSelected ? (tab.accent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-950') : 'text-stone-500 hover:bg-stone-50'}`}
-              >
-                <IconComponent className={`h-4.5 w-4.5 ${isSelected ? '' : 'text-stone-400'}`} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Content Box */}
-        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+    <>
+      <DashboardShell
+        user={user}
+        activeTab={activeTab}
+        onTabChange={(tabId) => { setActiveTab(tabId); setSelectedPlantId(null); }}
+        weatherData={weatherData}
+        onToggleNotifDrawer={() => {
+          setShowNotifDrawer(!showNotifDrawer);
+          if (!showNotifDrawer) markAllNotificationsRead();
+        }}
+        unreadCount={unreadCount}
+        onLogout={async () => { await logout(); router.push('/login'); }}
+      >
           <AnimatePresence mode="wait">
             {/* 1. DASHBOARD TAB */}
             {activeTab === 'dashboard' && (
@@ -843,8 +840,8 @@ export default function DashboardPage() {
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Farm Inspection Command Center</h1>
-                    <p className="text-sm text-stone-500 mt-1">Real-time localized diagnostics and crop health assessments.</p>
+                    <h1 className="text-2xl font-semibold tracking-tight text-stone-900">{roleConfig.overviewTitle}</h1>
+                    <p className="text-sm text-stone-500 mt-1">{roleConfig.overviewSubtitle}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-stone-400 font-mono hidden sm:inline mr-1">Export:</span>
@@ -961,6 +958,40 @@ export default function DashboardPage() {
                         *Prediction calculated via thermal-humidity index model. Consider pruning lower leaves of tomato/potato cultivar to minimize canopy humidity.
                       </p>
                     </div>
+
+                    {/* Upcoming Care Reminders - Hobbyist Gardener widget */}
+                    {user.accountType === 'Gardener' && (
+                      <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
+                        <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-stone-400 font-mono">Upcoming Care</span>
+                          <Heart className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        {gardenReminders.length === 0 ? (
+                          <p className="text-xs text-stone-400 text-center py-6">Nothing due right now — your garden&apos;s all caught up! 🌿</p>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            {gardenReminders.slice(0, 5).map((reminder) => {
+                              const plant = plants.find((p) => p.id === reminder.plantId);
+                              return (
+                                <div key={reminder.id} className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/50 text-xs">
+                                  <div>
+                                    <span className="font-semibold text-stone-800">{reminder.reminderType}</span>
+                                    <span className="block text-[10px] text-stone-500">{plant?.name || 'Unknown plant'} · Due {new Date(reminder.dueDate).toLocaleDateString()}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleCompleteReminder(reminder.id)}
+                                    className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                    title="Mark done"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Recent Plants & Crops */}
@@ -983,6 +1014,7 @@ export default function DashboardPage() {
                                 src={plant.photoUrl}
                                 alt={plant.name}
                                 className="h-11 w-11 rounded-xl object-cover border border-stone-200"
+                                onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0fdf4'/%3E%3Ctext x='50' y='62' font-size='44' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E"; }}
                               />
                               <div>
                                 <h4 className="text-sm font-semibold text-stone-950">{plant.name}</h4>
@@ -1089,6 +1121,7 @@ export default function DashboardPage() {
                                 src={plant.photoUrl}
                                 alt={plant.name}
                                 className="w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 192'%3E%3Crect width='400' height='192' fill='%23f0fdf4'/%3E%3Ctext x='200' y='115' font-size='80' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E"; }}
                               />
                               <div className="absolute top-4 right-4">
                                 <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full font-mono border ${plant.healthStatus === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : plant.healthStatus === 'Warning' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
@@ -1134,6 +1167,7 @@ export default function DashboardPage() {
                                 src={plant.photoUrl}
                                 alt={plant.name}
                                 className="h-32 w-32 rounded-2xl object-cover border border-stone-200 self-start"
+                                onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' fill='%23f0fdf4' rx='12'/%3E%3Ctext x='64' y='82' font-size='56' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E"; }}
                               />
                               <div>
                                 <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full font-mono border ${plant.healthStatus === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : plant.healthStatus === 'Warning' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
@@ -1167,7 +1201,7 @@ export default function DashboardPage() {
                           </div>
 
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* Notes logging & metadata */}
+                            {/* Notes logging & care reminders */}
                             <div className="lg:col-span-1 space-y-6">
                               <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
                                 <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-400 font-mono pb-3 border-b">Add timeline entry</h3>
@@ -1179,6 +1213,24 @@ export default function DashboardPage() {
                                     rows={3}
                                     className="block w-full px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950 focus:ring-2 focus:ring-emerald-500/20"
                                   />
+                                  {newNotePhoto ? (
+                                    <div className="relative">
+                                      <img src={newNotePhoto} alt="Journal photo preview" className="w-full h-28 object-cover rounded-xl border border-stone-200" onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 112'%3E%3Crect width='400' height='112' fill='%23fafaf9'/%3E%3Ctext x='200' y='70' font-size='48' text-anchor='middle'%3E📷%3C/text%3E%3C/svg%3E"; }} />
+                                      <button
+                                        type="button"
+                                        onClick={() => setNewNotePhoto(null)}
+                                        className="absolute top-1.5 right-1.5 p-1 bg-white/90 rounded-lg text-stone-500 hover:text-red-600 cursor-pointer"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <label className="flex items-center justify-center space-x-2 py-2 border border-dashed border-stone-300 rounded-xl text-[11px] text-stone-400 cursor-pointer hover:bg-stone-50 hover:text-stone-600">
+                                      <Camera className="h-3.5 w-3.5" />
+                                      <span>Attach a photo (optional)</span>
+                                      <input type="file" accept="image/*" onChange={handleNotePhotoChange} className="hidden" />
+                                    </label>
+                                  )}
                                   <button
                                     type="submit"
                                     disabled={isSavingNote || !newNoteContent.trim()}
@@ -1192,6 +1244,72 @@ export default function DashboardPage() {
                                     )}
                                   </button>
                                 </form>
+                              </div>
+
+                              {/* Care Reminders */}
+                              <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-400 font-mono pb-3 border-b">Care reminders</h3>
+                                <form onSubmit={handleAddReminder} className="mt-4 space-y-2">
+                                  <select
+                                    value={newReminderType}
+                                    onChange={(e: any) => setNewReminderType(e.target.value)}
+                                    className="block w-full px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                  >
+                                    <option value="Watering">💧 Watering</option>
+                                    <option value="Fertilizing">🌱 Fertilizing</option>
+                                    <option value="Pruning">✂️ Pruning</option>
+                                    <option value="Repotting">🪴 Repotting</option>
+                                    <option value="Pest Check">🔍 Pest Check</option>
+                                    <option value="Custom">📌 Custom</option>
+                                  </select>
+                                  <div className="flex space-x-2">
+                                    <input
+                                      type="date"
+                                      value={newReminderDueDate}
+                                      onChange={(e) => setNewReminderDueDate(e.target.value)}
+                                      className="flex-1 px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                    />
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={newReminderRecurringDays}
+                                      onChange={(e) => setNewReminderRecurringDays(e.target.value)}
+                                      placeholder="Repeat (days)"
+                                      className="w-28 px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                    />
+                                  </div>
+                                  <button
+                                    type="submit"
+                                    disabled={isAddingReminder}
+                                    className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold cursor-pointer hover:bg-emerald-700 disabled:opacity-55 flex items-center justify-center space-x-2"
+                                  >
+                                    {isAddingReminder ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <span>Add Reminder</span>}
+                                  </button>
+                                </form>
+
+                                <div className="mt-4 space-y-2">
+                                  {plantReminders.length === 0 ? (
+                                    <p className="text-[11px] text-stone-400 text-center py-3">No reminders yet for this plant.</p>
+                                  ) : (
+                                    plantReminders.map((reminder) => (
+                                      <div key={reminder.id} className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${reminder.completed ? 'border-stone-100 bg-stone-50 text-stone-400' : 'border-emerald-100 bg-emerald-50/50 text-stone-700'}`}>
+                                        <div>
+                                          <span className={`font-semibold ${reminder.completed ? 'line-through' : ''}`}>{reminder.reminderType}</span>
+                                          <span className="block text-[10px] text-stone-400 font-mono">Due {new Date(reminder.dueDate).toLocaleDateString()}</span>
+                                        </div>
+                                        {!reminder.completed && (
+                                          <button
+                                            onClick={() => handleCompleteReminder(reminder.id)}
+                                            className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                            title="Mark done"
+                                          >
+                                            <Check className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
                               </div>
                             </div>
 
@@ -1213,6 +1331,18 @@ export default function DashboardPage() {
                                         <Clock className="h-3.5 w-3.5" />
                                         <span>{new Date(note.createdAt).toLocaleDateString()} {new Date(note.createdAt).toLocaleTimeString()}</span>
                                       </div>
+                                      {note.photoUrl && (
+                                        <img
+                                          src={note.photoUrl}
+                                          alt="Journal entry photo"
+                                          className="mt-2 w-full max-w-xs h-32 object-cover rounded-xl border border-stone-200"
+                                          onError={(e) => {
+                                            const img = e.target as HTMLImageElement;
+                                            img.onerror = null; // prevent infinite loop
+                                            img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 128'%3E%3Crect width='300' height='128' fill='%23fafaf9' rx='10'/%3E%3Ctext x='150' y='80' font-size='56' text-anchor='middle'%3E📷%3C/text%3E%3C/svg%3E";
+                                          }}
+                                        />
+                                      )}
                                       <p className="text-xs text-stone-800 mt-2 leading-relaxed bg-stone-50 border p-3 rounded-xl">{note.content}</p>
                                     </div>
                                   ))
@@ -1413,6 +1543,17 @@ export default function DashboardPage() {
                         src={analysisResult.scan.imageUrl}
                         alt="Analyzed Foliage"
                         className="w-full rounded-xl border border-stone-200 aspect-[4/3] object-cover"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.onerror = null;
+                          // If the Supabase Storage URL failed (e.g. bucket not yet public),
+                          // fall back to the in-memory captured image from this scan session
+                          if (capturedImage && img.src !== capturedImage) {
+                            img.src = capturedImage;
+                          } else {
+                            img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23f0fdf4'/%3E%3Ctext x='200' y='170' font-size='80' text-anchor='middle'%3E🔬%3C/text%3E%3C/svg%3E";
+                          }
+                        }}
                       />
                       <button
                         onClick={() => {
@@ -1555,6 +1696,7 @@ export default function DashboardPage() {
                             src={plant.photoUrl}
                             alt={plant.name}
                             className="h-16 w-16 rounded-xl object-cover border border-stone-200"
+                            onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f0fdf4' rx='10'/%3E%3Ctext x='32' y='44' font-size='32' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E"; }}
                           />
                           <div>
                             <span className="px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-bold font-mono border border-red-200 rounded uppercase">
@@ -1823,6 +1965,25 @@ export default function DashboardPage() {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Operation Type</label>
+                    <select
+                      value={settingsAccountType}
+                      onChange={(e: any) => setSettingsAccountType(e.target.value)}
+                      className="mt-1 block w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="Gardener">🌱 Home / Hobbyist Gardener</option>
+                      <option value="Farmer">🚜 Commercial Farmer</option>
+                      <option value="Nursery">🌿 Farm Dashboard / Nursery Operator</option>
+                      <option value="Agribusiness">🏢 Agribusiness Professional</option>
+                    </select>
+                    {settingsAccountType !== user.accountType && (
+                      <p className="text-[11px] text-amber-600 mt-1.5">
+                        Switching roles changes your dashboard layout and navigation. Any data tied to your current role (e.g. inventory, expenses) stays intact and reappears if you switch back — nothing is deleted.
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wider transition-all shadow-sm cursor-pointer"
@@ -1833,8 +1994,7 @@ export default function DashboardPage() {
               </motion.div>
             )}
           </AnimatePresence>
-        </main>
-      </div>
+      </DashboardShell>
 
       {/* --- ADD PLANT / CROP MODAL OVERLAY --- */}
       {showAddPlantModal && (
@@ -2021,6 +2181,6 @@ export default function DashboardPage() {
           </motion.div>
         </div>
       )}
-    </div>
+    </>
   );
 }
