@@ -8,14 +8,32 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Allow access to remote image placeholder.
+  // Allow all external image hosts used across the app:
+  //  - picsum.photos      → placeholder/seed images in dev
+  //  - *.supabase.co      → Supabase Storage (agriscan bucket) for scan images, note photos
+  //  - images.unsplash.com → stock plant/crop photos used in seed data
+  //  - i.pravatar.cc      → avatar photos used in seed data
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**', // This allows any path under the hostname
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.pravatar.cc',
+        pathname: '/**',
       },
     ],
   },
