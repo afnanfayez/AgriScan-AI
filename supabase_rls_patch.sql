@@ -56,6 +56,7 @@ DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profi
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can delete their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 
 -- FIX: Restrict profile SELECT to own row only (not world-readable).
 -- Forum features need author_name which is stored in posts directly.
@@ -133,6 +134,10 @@ DROP POLICY IF EXISTS "Users can view plants they own or have farm access to" ON
 DROP POLICY IF EXISTS "Users can insert their own plants" ON public.plants;
 DROP POLICY IF EXISTS "Users can update their own plants" ON public.plants;
 DROP POLICY IF EXISTS "Users can delete their own plants" ON public.plants;
+DROP POLICY IF EXISTS "plants: owner or team member can view" ON public.plants;
+DROP POLICY IF EXISTS "plants: owner can insert" ON public.plants;
+DROP POLICY IF EXISTS "plants: owner can update" ON public.plants;
+DROP POLICY IF EXISTS "plants: owner can delete" ON public.plants;
 
 CREATE POLICY "plants: owner or team member can view"
   ON public.plants FOR SELECT
@@ -159,6 +164,10 @@ DROP POLICY IF EXISTS "Users can view their own scans" ON public.scans;
 DROP POLICY IF EXISTS "Users can create their own scans" ON public.scans;
 DROP POLICY IF EXISTS "Users can update their own scans" ON public.scans;
 DROP POLICY IF EXISTS "Users can delete their own scans" ON public.scans;
+DROP POLICY IF EXISTS "scans: owner can select" ON public.scans;
+DROP POLICY IF EXISTS "scans: owner can insert" ON public.scans;
+DROP POLICY IF EXISTS "scans: owner can update" ON public.scans;
+DROP POLICY IF EXISTS "scans: owner can delete" ON public.scans;
 
 -- scans has its own user_id column — use it directly (no join needed)
 CREATE POLICY "scans: owner can select"
@@ -185,6 +194,10 @@ DROP POLICY IF EXISTS "Users can view their own treatments" ON public.treatments
 DROP POLICY IF EXISTS "Users can update their own treatments" ON public.treatments;
 DROP POLICY IF EXISTS "Users can create their own treatments" ON public.treatments;
 DROP POLICY IF EXISTS "Users can delete their own treatments" ON public.treatments;
+DROP POLICY IF EXISTS "treatments: owner can select" ON public.treatments;
+DROP POLICY IF EXISTS "treatments: owner can insert" ON public.treatments;
+DROP POLICY IF EXISTS "treatments: owner can update" ON public.treatments;
+DROP POLICY IF EXISTS "treatments: owner can delete" ON public.treatments;
 
 CREATE POLICY "treatments: owner can select"
   ON public.treatments FOR SELECT
@@ -206,6 +219,10 @@ CREATE POLICY "treatments: owner can delete"
 -- ── notes ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Users can view their own notes" ON public.notes;
 DROP POLICY IF EXISTS "Users can modify their own notes" ON public.notes;
+DROP POLICY IF EXISTS "notes: owner can select" ON public.notes;
+DROP POLICY IF EXISTS "notes: owner can insert" ON public.notes;
+DROP POLICY IF EXISTS "notes: owner can update" ON public.notes;
+DROP POLICY IF EXISTS "notes: owner can delete" ON public.notes;
 
 CREATE POLICY "notes: owner can select"
   ON public.notes FOR SELECT
@@ -228,6 +245,10 @@ CREATE POLICY "notes: owner can delete"
 DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Users can insert their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "notifications: owner can select" ON public.notifications;
+DROP POLICY IF EXISTS "notifications: owner can insert" ON public.notifications;
+DROP POLICY IF EXISTS "notifications: owner can update" ON public.notifications;
+DROP POLICY IF EXISTS "notifications: owner can delete" ON public.notifications;
 
 CREATE POLICY "notifications: owner can select"
   ON public.notifications FOR SELECT
@@ -279,6 +300,10 @@ DROP POLICY IF EXISTS "Anyone can view forum posts" ON public.forum_posts;
 DROP POLICY IF EXISTS "Authenticated users can create posts" ON public.forum_posts;
 DROP POLICY IF EXISTS "Authors can update posts" ON public.forum_posts;
 DROP POLICY IF EXISTS "Authors can delete posts" ON public.forum_posts;
+DROP POLICY IF EXISTS "forum_posts: anyone can view" ON public.forum_posts;
+DROP POLICY IF EXISTS "forum_posts: authenticated users can create" ON public.forum_posts;
+DROP POLICY IF EXISTS "forum_posts: authors can update" ON public.forum_posts;
+DROP POLICY IF EXISTS "forum_posts: authors can delete" ON public.forum_posts;
 
 CREATE POLICY "forum_posts: anyone can view"
   ON public.forum_posts FOR SELECT
@@ -302,6 +327,10 @@ DROP POLICY IF EXISTS "Anyone can view comments" ON public.forum_comments;
 DROP POLICY IF EXISTS "Authenticated users can create comments" ON public.forum_comments;
 DROP POLICY IF EXISTS "Authors can delete comments" ON public.forum_comments;
 DROP POLICY IF EXISTS "Authors can update comments" ON public.forum_comments;
+DROP POLICY IF EXISTS "forum_comments: anyone can view" ON public.forum_comments;
+DROP POLICY IF EXISTS "forum_comments: authenticated users can create" ON public.forum_comments;
+DROP POLICY IF EXISTS "forum_comments: authors can update" ON public.forum_comments;
+DROP POLICY IF EXISTS "forum_comments: authors can delete" ON public.forum_comments;
 
 CREATE POLICY "forum_comments: anyone can view"
   ON public.forum_comments FOR SELECT
@@ -324,6 +353,10 @@ CREATE POLICY "forum_comments: authors can delete"
 DROP POLICY IF EXISTS "Users can view their expert reviews" ON public.expert_reviews;
 DROP POLICY IF EXISTS "Users can request expert reviews" ON public.expert_reviews;
 DROP POLICY IF EXISTS "Users can update their expert reviews" ON public.expert_reviews;
+DROP POLICY IF EXISTS "expert_reviews: owner can select" ON public.expert_reviews;
+DROP POLICY IF EXISTS "expert_reviews: owner can insert" ON public.expert_reviews;
+DROP POLICY IF EXISTS "expert_reviews: owner can update" ON public.expert_reviews;
+DROP POLICY IF EXISTS "expert_reviews: owner can delete" ON public.expert_reviews;
 
 CREATE POLICY "expert_reviews: owner can select"
   ON public.expert_reviews FOR SELECT
@@ -344,6 +377,7 @@ CREATE POLICY "expert_reviews: owner can delete"
 
 -- ── diseases_reference (global read-only reference table) ──
 DROP POLICY IF EXISTS "Anyone can view diseases reference" ON public.diseases_reference;
+DROP POLICY IF EXISTS "diseases_reference: anyone can view" ON public.diseases_reference;
 
 CREATE POLICY "diseases_reference: anyone can view"
   ON public.diseases_reference FOR SELECT
