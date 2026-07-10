@@ -32,11 +32,14 @@ export async function uploadImageToStorage(
   try {
     const adminClient = getSupabaseAdminClient();
     
-    // Ensure the bucket exists
+    // Ensure the bucket exists AND is set to public.
+    // createBucket only has effect on first creation; updateBucket ensures an
+    // existing bucket that was created as private is made public too.
     try {
       await adminClient.storage.createBucket(bucketName, { public: true });
     } catch {
-      // Bucket might already exist, ignore
+      // Bucket already exists — update it to public to be safe
+      await adminClient.storage.updateBucket(bucketName, { public: true });
     }
 
     // Extract base64 clean content
