@@ -31,13 +31,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, zoneCount } = await req.json();
+    const { name, zoneCount, location, acreage, cropType } = await req.json();
     if (!name) {
       return NextResponse.json({ error: 'Farm name is required' }, { status: 400 });
     }
 
     const supabase = await createClient();
-    const farm = await createFarm(supabase, user, { name, zoneCount });
+    const farm = await createFarm(supabase, user, { name, zoneCount, location, acreage, cropType });
 
     return NextResponse.json({ success: true, farm });
   } catch (error: any) {

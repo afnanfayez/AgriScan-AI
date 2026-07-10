@@ -10,6 +10,9 @@ const mapFarm = (f: any): FarmField => ({
   name: f.name,
   userId: f.user_id,
   zoneCount: f.zone_count,
+  location: f.location ?? undefined,
+  acreage: f.acreage ?? undefined,
+  cropType: f.crop_type ?? undefined,
   createdAt: f.created_at,
 });
 
@@ -51,7 +54,7 @@ export async function listFarms(supabase: SupabaseClient, user: SupabaseUserProf
 export async function createFarm(
   supabase: SupabaseClient,
   user: SupabaseUserProfile,
-  input: { name: string; zoneCount?: number }
+  input: { name: string; zoneCount?: number; location?: string; acreage?: number; cropType?: string }
 ): Promise<FarmField> {
   const { data: newFarm, error: farmError } = await supabase
     .from('farms')
@@ -59,6 +62,9 @@ export async function createFarm(
       name: input.name,
       user_id: user.id,
       zone_count: input.zoneCount || 1,
+      location: input.location,
+      acreage: input.acreage,
+      crop_type: input.cropType,
     })
     .select()
     .single();
