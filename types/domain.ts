@@ -1,12 +1,17 @@
 // Shared domain types used by services (server) and components (client).
 // These mirror the camelCase shapes returned by the API (see services/*'s mapX() functions).
 
+// The single role field (profiles.account_type) that drives which dashboard
+// experience a user sees. Reused as-is rather than introducing a parallel
+// "operation_type" column - see supabase_role_features_patch.sql.
+export type AccountType = 'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness';
+
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   avatarUrl: string;
-  accountType: 'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness';
+  accountType: AccountType;
   location: string;
   units: 'metric' | 'imperial';
   plan: 'Free' | 'Pro' | 'Enterprise';
@@ -18,6 +23,9 @@ export interface FarmField {
   name: string;
   userId: string;
   zoneCount: number;
+  location?: string;
+  acreage?: number;
+  cropType?: string;
   createdAt: string;
 }
 
@@ -63,6 +71,7 @@ export interface PlantNote {
   plantId: string;
   userId: string;
   content: string;
+  photoUrl?: string;
   createdAt: string;
 }
 
@@ -122,4 +131,115 @@ export interface DiseaseReference {
   prevention: string;
   organicTreatments: string[];
   chemicalTreatments: string[];
+}
+
+// ─── Role-specific domain types (see supabase_role_features_patch.sql) ───
+
+// Hobbyist Gardener
+export interface CareReminder {
+  id: string;
+  plantId: string;
+  userId: string;
+  reminderType: 'Watering' | 'Fertilizing' | 'Pruning' | 'Repotting' | 'Pest Check' | 'Custom';
+  dueDate: string;
+  recurringDays?: number;
+  notes?: string;
+  completed: boolean;
+  completedAt?: string;
+  createdAt: string;
+}
+
+// Commercial Farmer + Agribusiness Professional
+export interface Expense {
+  id: string;
+  userId: string;
+  farmId?: string;
+  category: 'Seed' | 'Fertilizer' | 'Equipment' | 'Labor' | 'Water' | 'Pesticide' | 'Other';
+  type: 'Expense' | 'Revenue';
+  amount: number;
+  description?: string;
+  occurredOn: string;
+  createdAt: string;
+}
+
+// Commercial Farmer
+export interface Equipment {
+  id: string;
+  userId: string;
+  farmId?: string;
+  name: string;
+  equipmentType: 'Tractor' | 'Irrigation' | 'Sprayer' | 'Harvester' | 'Tool' | 'Other';
+  status: 'Operational' | 'Maintenance' | 'Retired';
+  purchaseDate?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// Commercial Farmer (worker scheduling) / Agribusiness (team tasks)
+export interface FarmTask {
+  id: string;
+  userId: string;
+  farmId?: string;
+  assigneeEmail?: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  createdAt: string;
+}
+
+// Nursery Operator
+export interface InventoryBatch {
+  id: string;
+  userId: string;
+  farmId?: string;
+  plantType: string;
+  batchName?: string;
+  quantity: number;
+  unitPrice?: number;
+  propagationDate?: string;
+  readyDate?: string;
+  status: 'Propagating' | 'Growing' | 'Ready' | 'Sold Out';
+  lowStockThreshold: number;
+  createdAt: string;
+}
+
+// Nursery Operator
+export interface Order {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerContact?: string;
+  status: 'Pending' | 'Fulfilled' | 'Cancelled';
+  totalAmount?: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  batchId?: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+// Nursery Operator
+export interface Supplier {
+  id: string;
+  userId: string;
+  name: string;
+  contactInfo?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// Agribusiness Professional (reference data, not user-owned)
+export interface MarketPrice {
+  id: string;
+  cropType: string;
+  avgPrice: number;
+  unit: string;
+  region?: string;
+  recordedOn: string;
 }
