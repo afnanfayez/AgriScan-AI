@@ -1,44 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-// Client-side / Public Supabase client (used for public selections or browser calls)
-// Initialized conditionally to prevent app-crash during build/deploy healthchecks if keys are temporarily missing.
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null as any;
-
-/**
- * Creates a server-side Supabase client.
- * If a JWT token is passed, it sets the Authorization header so that RLS is enforced
- * and `auth.uid()` resolves correctly.
- */
-export function getSupabaseServerClient(token?: string) {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase URL and Anon Key must be configured in environment variables.');
-  }
-
-  if (token) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-      auth: {
-        persistSession: false,
-      }
-    });
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-    }
-  });
-}
 
 /**
  * Creates an administrative client using the Service Role Key.

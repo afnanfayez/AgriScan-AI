@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -8,10 +9,14 @@ const supabaseKey =
 
 /**
  * Middleware Supabase client using @supabase/ssr.
- * Keeps auth session cookies refreshed on every request.
+ * Keeps auth session cookies refreshed on every request and returns the
+ * current user (if any) so the caller can make routing decisions without
+ * a second round-trip to Supabase.
  * Called from the root middleware.ts file.
  */
-export const updateSession = async (request: NextRequest) => {
+export const updateSession = async (
+  request: NextRequest
+): Promise<{ response: NextResponse; user: User | null }> => {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -35,7 +40,7 @@ export const updateSession = async (request: NextRequest) => {
 
   // IMPORTANT: Do NOT add logic between createServerClient and getUser().
   // Any mistake here will make the session hard to debug.
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return supabaseResponse;
+  return { response: supabaseResponse, user };
 };
