@@ -1,19 +1,5 @@
-/**
- * LEGACY FILE - RETAINED FOR TYPE COMPATIBILITY ONLY
- *
- * This file previously contained a local JSON file-based database
- * (agriscan_db.json) used during early development.
- *
- * ALL data persistence has been migrated to Supabase (Postgres + Auth + Storage).
- * No API routes import from this file. The actual Supabase clients live in lib/supabase.ts.
- *
- * The type definitions below are kept here for any legacy imports but should
- * be migrated to their Supabase equivalents over time.
- *
- * DO NOT add any `fs`, `path`, `getDb()`, or `saveDb()` calls here.
- */
-
-// ─── Legacy type definitions (kept for compatibility) ─────────────────────────
+// Shared domain types used by services (server) and components (client).
+// These mirror the camelCase shapes returned by the API (see services/*'s mapX() functions).
 
 export interface UserProfile {
   id: string;
@@ -104,7 +90,7 @@ export interface ForumPost {
   content: string;
   userId: string;
   authorName: string;
-  category: 'General' | 'Diseases' | 'Tips' | 'Farming Tech';
+  category: 'General' | 'Diseases' | 'Tips' | 'Farming Tech' | 'QA';
   likes: string[];
   createdAt: string;
 }

@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
-import { getSupabaseServerClient } from '@/lib/supabase';
-
-const mapNote = (n: any) => ({
-  id: n.id,
-  plantId: n.plant_id,
-  userId: n.user_id,
-  content: n.content,
-  createdAt: n.created_at,
-});
+import { createClient } from '@/utils/supabase/server';
+import { listNotesForPlant, createNote, deleteNote } from '@/services/notes-service';
+import { ServiceError } from '@/services/errors';
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -24,28 +18,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Plant ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient(user.token);
-    const { data: notesData, error } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('plant_id', plantId)
-      .order('created_at', { ascending: false });
+    const supabase = await createClient();
+    const notes = await listNotesForPlant(supabase, plantId);
 
-    if (error) {
-      console.error('Error fetching notes:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, notes: (notesData || []).map(mapNote) });
+    return NextResponse.json({ success: true, notes });
   } catch (error: any) {
     console.error('Get notes error:', error);
+    if (error instanceof ServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -56,32 +44,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Plant ID and content are required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient(user.token);
-    const { data: newNote, error: insertError } = await supabase
-      .from('notes')
-      .insert({
-        plant_id: plantId,
-        user_id: user.id,
-        content,
-      })
-      .select()
-      .single();
+    const supabase = await createClient();
+    const note = await createNote(supabase, user, { plantId, content });
 
-    if (insertError || !newNote) {
-      console.error('Error inserting note:', insertError);
-      return NextResponse.json({ error: insertError?.message || 'Failed to insert note' }, { status: 400 });
-    }
-
-    return NextResponse.json({ success: true, note: mapNote(newNote) });
+    return NextResponse.json({ success: true, note });
   } catch (error: any) {
     console.error('Create note error:', error);
+    if (error instanceof ServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -93,20 +71,15 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Note ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient(user.token);
-    const { error: deleteError } = await supabase
-      .from('notes')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      console.error('Error deleting note:', deleteError);
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+    const supabase = await createClient();
+    await deleteNote(supabase, id);
 
     return NextResponse.json({ success: true, message: 'Note deleted successfully' });
   } catch (error: any) {
     console.error('Delete note error:', error);
+    if (error instanceof ServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

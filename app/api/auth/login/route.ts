@@ -1,55 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase';
-import { setSessionCookie } from '@/lib/auth';
+import { createClient } from '@/utils/supabase/server';
+import { login } from '@/services/auth/session';
+import { ServiceError } from '@/services/errors';
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    if (!email || !password) {
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase(),
-      password,
-    });
+    const supabase = await createClient();
+    const user = await login(supabase, email, password);
 
-    if (error || !data.user || !data.session) {
-      return NextResponse.json({ error: error?.message || 'Invalid email or password' }, { status: 401 });
-    }
-
-    // Fetch user profile from public.profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    const isVerified = data.user.user_metadata?.is_verified ?? false;
-
-    const userObj = {
-      id: data.user.id,
-      email: data.user.email || '',
-      name: profile?.name || data.user.user_metadata?.name || email.split('@')[0],
-      avatarUrl: profile?.avatar_url || data.user.user_metadata?.avatar_url || `https://picsum.photos/seed/${data.user.id}/150/150`,
-      accountType: profile?.account_type || data.user.user_metadata?.account_type || 'Gardener',
-      location: profile?.location || '',
-      units: profile?.units || 'metric',
-      plan: profile?.plan || 'Free',
-      isVerified,
-    };
-
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      user: userObj,
+      user,
     });
-
-    setSessionCookie(res, data.session.access_token);
-    return res;
   } catch (error: any) {
     console.error('Login error:', error);
+    if (error instanceof ServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
