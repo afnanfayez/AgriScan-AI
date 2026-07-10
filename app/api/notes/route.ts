@@ -38,14 +38,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { plantId, content } = await req.json();
+    const { plantId, content, photo } = await req.json();
 
     if (!plantId || !content) {
       return NextResponse.json({ error: 'Plant ID and content are required' }, { status: 400 });
     }
 
     const supabase = await createClient();
-    const note = await createNote(supabase, user, { plantId, content });
+    const note = await createNote(supabase, user, { plantId, content, photo });
 
     return NextResponse.json({ success: true, note });
   } catch (error: any) {

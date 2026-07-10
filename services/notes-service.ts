@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { uploadImageToStorage } from '@/lib/supabase';
 import type { SupabaseUserProfile } from '@/lib/auth';
 import type { PlantNote } from '@/types/domain';
 import { ServiceError } from './errors';
@@ -10,6 +11,7 @@ const mapNote = (n: any): PlantNote => ({
   plantId: n.plant_id,
   userId: n.user_id,
   content: n.content,
+  photoUrl: n.photo_url ?? undefined,
   createdAt: n.created_at,
 });
 
@@ -31,14 +33,23 @@ export async function listNotesForPlant(supabase: SupabaseClient, plantId: strin
 export async function createNote(
   supabase: SupabaseClient,
   user: SupabaseUserProfile,
-  input: { plantId: string; content: string }
+  input: { plantId: string; content: string; photo?: string }
 ): Promise<PlantNote> {
+  // `photo` is a base64 data URL from the client (photo journal upload);
+  // upload it to storage the same way scans-service.ts does for scan images.
+  let photoUrl: string | undefined;
+  if (input.photo) {
+    const fileName = `notes/${user.id}/${Date.now()}.jpg`;
+    photoUrl = (await uploadImageToStorage(input.photo, fileName, 'agriscan')) || undefined;
+  }
+
   const { data: newNote, error: insertError } = await supabase
     .from('notes')
     .insert({
       plant_id: input.plantId,
       user_id: user.id,
       content: input.content,
+      photo_url: photoUrl,
     })
     .select()
     .single();
