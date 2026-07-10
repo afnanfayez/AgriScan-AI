@@ -1,36 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-// Types matching the Supabase schema (previously imported from the legacy lib/db local file)
-export interface FarmField {
-  id: string;
-  name: string;
-  userId: string;
-  zoneCount: number;
-  createdAt: string;
-}
+import type { FarmField, PlantCrop, NotificationItem } from '@/types/domain';
 
-export interface PlantCrop {
-  id: string;
-  name: string;
-  type: string;
-  plantingDate: string;
-  healthStatus: 'Healthy' | 'Warning' | 'Critical';
-  photoUrl: string;
-  farmId: string;
-  userId: string;
-  createdAt: string;
-}
-
-export interface NotificationItem {
-  id: string;
-  userId: string;
-  title: string;
-  message: string;
-  category: 'Scan' | 'Treatment' | 'Alert' | 'Community' | 'System';
-  read: boolean;
-  createdAt: string;
-}
+export type { FarmField, PlantCrop, NotificationItem };
 
 interface OnboardChoices {
   accountType?: 'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness';
@@ -149,9 +122,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password, name, accountType }),
       });
       const data = await res.json();
+      // Signup only sends an OTP email — the account doesn't exist yet, so
+      // there's no user/session to hydrate until /api/auth/verify succeeds.
       if (res.ok && data.success) {
-        setUser(data.user);
-        await refreshAll();
         return { success: true };
       }
       return { success: false, error: data.error || 'Signup failed' };
