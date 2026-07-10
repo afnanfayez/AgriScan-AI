@@ -1,11 +1,12 @@
 import { createClient } from '@/utils/supabase/server';
+import type { AccountType } from '@/types/domain';
 
 export interface SupabaseUserProfile {
   id: string;
   email: string;
   name: string;
   avatarUrl: string;
-  accountType: string;
+  accountType: AccountType;
   location: string;
   units: 'metric' | 'imperial';
   plan: 'Free' | 'Pro' | 'Enterprise';

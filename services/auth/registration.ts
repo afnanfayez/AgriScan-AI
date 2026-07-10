@@ -2,6 +2,7 @@ import { getSupabaseAdminClient } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/server';
 import { sendVerificationEmail } from '@/lib/email';
 import { encryptSecret, decryptSecret } from '@/lib/crypto';
+import type { AccountType } from '@/types/domain';
 import { ServiceError } from '../errors';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -10,7 +11,7 @@ export async function signup(input: {
   email: string;
   password: string;
   name: string;
-  accountType?: string;
+  accountType?: AccountType;
 }): Promise<{ email: string }> {
   const { email, password, name, accountType } = input;
   const adminClient = getSupabaseAdminClient();
@@ -65,7 +66,7 @@ export interface VerifyEmailResult {
   email: string;
   name: string;
   avatarUrl: string;
-  accountType: string;
+  accountType: AccountType;
   location: string;
   units: string;
   plan: string;

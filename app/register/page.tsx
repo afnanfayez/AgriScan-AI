@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-context';
 import AuthLayout from '@/components/auth-layout';
+import type { AccountType } from '@/types/domain';
 import { motion } from 'motion/react';
 import {
   Sprout,
@@ -31,7 +32,7 @@ function RegisterForm() {
   const [email, setEmail] = useState(emailFromUrl);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [accountType, setAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
+  const [accountType, setAccountType] = useState<AccountType>('Gardener');
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 

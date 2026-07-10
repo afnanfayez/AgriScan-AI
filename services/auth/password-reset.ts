@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/server';
 import { sendPasswordResetEmail } from '@/lib/email';
+import type { AccountType } from '@/types/domain';
 import { ServiceError } from '../errors';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -109,7 +110,7 @@ export interface ConfirmResetResult {
   email: string;
   name: string;
   avatarUrl: string;
-  accountType: string;
+  accountType: AccountType;
   location: string;
   units: string;
   plan: string;

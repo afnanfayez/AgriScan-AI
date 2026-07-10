@@ -1,11 +1,12 @@
 import { createClient } from '@/utils/supabase/server';
 import type { SupabaseUserProfile } from '@/lib/auth';
+import type { AccountType } from '@/types/domain';
 import { ServiceError } from '../errors';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface OnboardInput {
-  accountType?: string;
+  accountType?: AccountType;
   location?: string;
   units?: string;
   plan?: string;
@@ -17,7 +18,7 @@ export interface OnboardResult {
   email: string;
   name: string;
   avatarUrl: string;
-  accountType: string;
+  accountType: AccountType;
   location: string;
   units: string;
   plan: string;

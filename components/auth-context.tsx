@@ -1,12 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { FarmField, PlantCrop, NotificationItem } from '@/types/domain';
+import type { FarmField, PlantCrop, NotificationItem, AccountType } from '@/types/domain';
 
-export type { FarmField, PlantCrop, NotificationItem };
+export type { FarmField, PlantCrop, NotificationItem, AccountType };
 
 interface OnboardChoices {
-  accountType?: 'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness';
+  accountType?: AccountType;
   location?: string;
   units?: 'metric' | 'imperial';
   plan?: 'Free' | 'Pro' | 'Enterprise';
@@ -25,7 +25,7 @@ interface AuthContextType {
   notifications: NotificationItem[];
   unreadCount: number;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (email: string, password: string, name: string, accountType: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string, name: string, accountType: AccountType) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   onboard: (choices: OnboardChoices) => Promise<{ success: boolean; error?: string }>;
   refreshAll: () => Promise<void>;
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signup = async (email: string, password: string, name: string, accountType: string) => {
+  const signup = async (email: string, password: string, name: string, accountType: AccountType) => {
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
