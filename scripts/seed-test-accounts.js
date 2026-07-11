@@ -376,19 +376,45 @@ async function seedGardener(userId, userEmail, userName) {
 
 // ─── FARMER ──────────────────────────────────────────────────────────────────
 async function seedFarmer(userId, userEmail, userName) {
-  console.log('\n  [Farmer] Seeding farm, plants, equipment, expenses, tasks, team...');
+  console.log('\n  [Farmer] Seeding fields, plants, equipment, expenses, tasks, team...');
 
-  // Farm
-  const { data: farm, error: farmErr } = await supabase.from('farms').insert({
-    name: 'Reyes Valley Tomato & Almond Farm',
-    user_id: userId,
-    zone_count: 6,
-    location: 'Fresno, CA',
-    acreage: 280,
-    crop_type: 'Tomato, Almond',
-  }).select().single();
-  if (farmErr) { console.error('  Farm error:', farmErr.message); return; }
-  const farmId = farm.id;
+  // Three fields (Commercial Farmer "fields" = farms rows), varied size/crop/status,
+  // all near Fresno, CA with real lat/lng for the Field Map.
+  const { data: fields, error: fieldsErr } = await supabase.from('farms').insert([
+    {
+      name: 'Block A — Roma Tomato',
+      user_id: userId,
+      zone_count: 3,
+      location: 'Fresno, CA',
+      acreage: 40,
+      crop_type: 'Tomato',
+      latitude: 36.7378,
+      longitude: -119.7871,
+    },
+    {
+      name: 'Block B — Beefsteak Tomato',
+      user_id: userId,
+      zone_count: 3,
+      location: 'Fresno, CA',
+      acreage: 35,
+      crop_type: 'Tomato',
+      latitude: 36.7512,
+      longitude: -119.7695,
+    },
+    {
+      name: 'Nonpareil Almond Orchard',
+      user_id: userId,
+      zone_count: 6,
+      location: 'Fresno, CA',
+      acreage: 205,
+      crop_type: 'Nut Tree',
+      latitude: 36.7201,
+      longitude: -119.8103,
+    },
+  ]).select();
+  if (fieldsErr) { console.error('  Fields error:', fieldsErr.message); return; }
+  const [fieldA, fieldB, fieldAlmond] = fields;
+  const farmId = fieldA.id; // legacy anchor field for team_members (farm_id NOT NULL there)
 
   // ── Plants ─────────────────────────────────────────────────────────────────
   const plantsData = [
@@ -398,7 +424,7 @@ async function seedFarmer(userId, userEmail, userName) {
       planting_date: daysAgo(60),
       health_status: 'Healthy',
       photo_url: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop',
-      farm_id: farmId, user_id: userId,
+      farm_id: fieldA.id, user_id: userId,
     },
     {
       name: 'Beefsteak Tomato — Block B',
@@ -406,7 +432,7 @@ async function seedFarmer(userId, userEmail, userName) {
       planting_date: daysAgo(55),
       health_status: 'Critical',
       photo_url: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop',
-      farm_id: farmId, user_id: userId,
+      farm_id: fieldB.id, user_id: userId,
     },
     {
       name: 'Nonpareil Almond Orchard',
@@ -414,7 +440,7 @@ async function seedFarmer(userId, userEmail, userName) {
       planting_date: daysAgo(365 * 3),
       health_status: 'Healthy',
       photo_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
-      farm_id: farmId, user_id: userId,
+      farm_id: fieldAlmond.id, user_id: userId,
     },
   ];
   const { data: plants, error: plantErr } = await supabase.from('plants').insert(plantsData).select();
@@ -482,7 +508,7 @@ async function seedFarmer(userId, userEmail, userName) {
   console.log('  [Farmer] Adding equipment...');
   await supabase.from('equipment').insert([
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       name: 'John Deere 6120M Tractor',
       equipment_type: 'Tractor',
       status: 'Operational',
@@ -490,7 +516,7 @@ async function seedFarmer(userId, userEmail, userName) {
       notes: '2,200 hours on engine. Last service: 2026-05-10. Next service due at 2,500 hours.',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       name: 'Netafim Drip Irrigation — Block A & B',
       equipment_type: 'Irrigation',
       status: 'Operational',
@@ -498,7 +524,7 @@ async function seedFarmer(userId, userEmail, userName) {
       notes: '6 zones, each 45 min cycle. Emitter pressure check due next month.',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldB.id,
       name: 'Jacto AD-14 Sprayer',
       equipment_type: 'Sprayer',
       status: 'Maintenance',
@@ -506,7 +532,7 @@ async function seedFarmer(userId, userEmail, userName) {
       notes: 'Nozzle tips clogged after last Chlorothalonil run. Ordered replacement tips — expected delivery Jul 14.',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldAlmond.id,
       name: 'Case IH 7140 Harvester',
       equipment_type: 'Harvester',
       status: 'Operational',
@@ -519,68 +545,154 @@ async function seedFarmer(userId, userEmail, userName) {
   console.log('  [Farmer] Adding expenses & revenues...');
   await supabase.from('expenses').insert([
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       category: 'Seed',   type: 'Expense', amount: 3840.00,
       description: 'Roma & Beefsteak certified disease-free transplants (4,800 units × $0.80)',
       occurred_on: daysAgo(70),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       category: 'Fertilizer', type: 'Expense', amount: 1250.00,
       description: '10-0-10 liquid fertigation blend — 25 totes × $50',
       occurred_on: daysAgo(55),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldB.id,
       category: 'Pesticide', type: 'Expense', amount: 680.00,
       description: 'Chlorothalonil + Mefenoxam tank mix — emergency late blight response',
       occurred_on: daysAgo(2),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       category: 'Labor', type: 'Expense', amount: 8400.00,
       description: 'Field crew (12 workers × 7 weeks @ $100/day)',
       occurred_on: daysAgo(14),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       category: 'Water', type: 'Expense', amount: 920.00,
       description: 'Irrigation district charge — June water allotment',
       occurred_on: daysAgo(10),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldB.id,
       category: 'Equipment', type: 'Expense', amount: 340.00,
       description: 'Jacto sprayer nozzle replacement kit + labour',
       occurred_on: daysAgo(3),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldAlmond.id,
       category: 'Other', type: 'Revenue', amount: 42000.00,
       description: 'Almond contract partial payment — first tranche on 70-tonne advance',
       occurred_on: daysAgo(20),
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       category: 'Other', type: 'Revenue', amount: 12500.00,
       description: 'Block A Roma tomato wholesale delivery — 5,000 lbs @ $2.50/lb',
       occurred_on: daysAgo(7),
+    },
+    {
+      user_id: userId, farm_id: fieldA.id,
+      category: 'Seed', type: 'Expense', amount: 2100.00,
+      description: 'Cover crop seed for post-harvest rotation — Block A',
+      occurred_on: daysAgo(120),
+    },
+    {
+      user_id: userId, farm_id: fieldB.id,
+      category: 'Labor', type: 'Expense', amount: 5600.00,
+      description: 'Extra crew shift — late blight scouting & pruning, Block B',
+      occurred_on: daysAgo(45),
+    },
+    {
+      user_id: userId, farm_id: fieldAlmond.id,
+      category: 'Water', type: 'Expense', amount: 3400.00,
+      description: 'Micro-sprinkler irrigation — almond orchard, spring cycle',
+      occurred_on: daysAgo(100),
+    },
+    {
+      user_id: userId, farm_id: fieldA.id,
+      category: 'Other', type: 'Revenue', amount: 9800.00,
+      description: 'Roma tomato spot-market sale — 4,000 lbs',
+      occurred_on: daysAgo(150),
+    },
+  ]);
+
+  // ── Field scans (batch scanner results) ────────────────────────────────────
+  console.log('  [Farmer] Adding field scans...');
+  await supabase.from('field_scans').insert([
+    {
+      user_id: userId, farm_id: fieldB.id,
+      total_samples: 8, healthy_count: 2, infection_percentage: 75,
+      results: [
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 94, severity: 'High', symptoms: 'Dark brown, water-soaked lesions on lower leaves; white sporulation on undersides.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 91, severity: 'High', symptoms: 'Rapid fruit lesion spread near north end of block.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 88, severity: 'Medium', symptoms: 'Early-stage water-soaked patches on lower canopy.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 85, severity: 'Medium', symptoms: 'Leaf yellowing with irregular brown margins.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 79, severity: 'Medium', symptoms: 'Localized lesion cluster, rows 8-10.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 82, severity: 'Low', symptoms: 'No visible lesions, uniform green canopy.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 77, severity: 'Low', symptoms: 'Healthy fruit set, no blight symptoms observed.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Tomato Late Blight', confidence: 90, severity: 'High', symptoms: 'Advanced foliar collapse near irrigation head.' },
+      ],
+      created_at: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      user_id: userId, farm_id: fieldA.id,
+      total_samples: 6, healthy_count: 6, infection_percentage: 0,
+      results: [
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 96, severity: 'Low', symptoms: 'Uniform fruit set, no disease indicators.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 93, severity: 'Low', symptoms: 'Vigorous canopy growth across sample rows.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 95, severity: 'Low', symptoms: 'No pest or disease pressure observed.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 90, severity: 'Low', symptoms: 'Good color break progressing on schedule.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 92, severity: 'Low', symptoms: 'Consistent leaf color, no chlorosis.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 94, severity: 'Low', symptoms: 'No visible lesions across sample set.' },
+      ],
+      created_at: new Date(today.getTime() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  ]);
+
+  // ── Irrigation & inputs log ────────────────────────────────────────────────
+  console.log('  [Farmer] Adding irrigation logs...');
+  await supabase.from('irrigation_logs').insert([
+    {
+      user_id: userId, farm_id: fieldA.id,
+      log_type: 'Irrigation', amount: 1800, unit: 'gallons',
+      notes: 'Drip cycle, Block A — 6 hours per zone.',
+      logged_on: daysAgo(1),
+    },
+    {
+      user_id: userId, farm_id: fieldB.id,
+      log_type: 'Pesticide', amount: 12, unit: 'liters',
+      notes: 'Chlorothalonil + Mefenoxam tank mix applied to Block B, north end first.',
+      logged_on: daysAgo(2),
+    },
+    {
+      user_id: userId, farm_id: fieldAlmond.id,
+      log_type: 'Fertilizer', amount: 300, unit: 'kg',
+      notes: 'Foliar potassium application ahead of hull split.',
+      logged_on: daysAgo(6),
+    },
+    {
+      user_id: userId, farm_id: fieldA.id,
+      log_type: 'Irrigation', amount: 1650, unit: 'gallons',
+      notes: 'Drip cycle, Block A — reduced 30 min due to recent rain.',
+      logged_on: daysAgo(8),
     },
   ]);
 
   // ── Team members ───────────────────────────────────────────────────────────
   console.log('  [Farmer] Adding team members...');
   await supabase.from('team_members').insert([
-    { farm_id: farmId, email: 'pedro.supervisor@agriscan-test.dev', role: 'Manager' },
-    { farm_id: farmId, email: 'rosa.worker@agriscan-test.dev',       role: 'Worker'  },
-    { farm_id: farmId, email: 'jose.worker@agriscan-test.dev',       role: 'Worker'  },
+    { farm_id: fieldA.id, email: 'pedro.supervisor@agriscan-test.dev', role: 'Manager' },
+    { farm_id: fieldA.id, email: 'rosa.worker@agriscan-test.dev',       role: 'Worker'  },
+    { farm_id: fieldB.id, email: 'jose.worker@agriscan-test.dev',       role: 'Worker'  },
   ]);
 
   // ── Farm tasks ─────────────────────────────────────────────────────────────
   console.log('  [Farmer] Adding farm tasks...');
   await supabase.from('farm_tasks').insert([
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldB.id,
       title: 'Apply emergency fungicide — Block B late blight',
       description: 'Tank mix Chlorothalonil + Mefenoxam. Start from north end. Wear full PPE. Cover 48 rows.',
       assignee_email: 'pedro.supervisor@agriscan-test.dev',
@@ -588,7 +700,7 @@ async function seedFarmer(userId, userEmail, userName) {
       status: 'Pending',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       title: 'Harvest Block A Roma tomatoes — rows 1–6',
       description: 'Pick at 85% color break. Load 50-lb bins. Coordinate with transport at 7 AM.',
       assignee_email: 'rosa.worker@agriscan-test.dev',
@@ -596,7 +708,7 @@ async function seedFarmer(userId, userEmail, userName) {
       status: 'Pending',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       title: 'Drip system emitter check — all zones',
       description: 'Walk all 6 zones. Replace clogged emitters. Record pressure readings per zone.',
       assignee_email: 'jose.worker@agriscan-test.dev',
@@ -604,14 +716,14 @@ async function seedFarmer(userId, userEmail, userName) {
       status: 'Pending',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldAlmond.id,
       title: 'Pre-harvest almond orchard inspection',
       description: 'Check hull split percentage across 5 sample trees per block. Report back to Carlos.',
       due_date: daysAgo(5),
       status: 'Completed',
     },
     {
-      user_id: userId, farm_id: farmId,
+      user_id: userId, farm_id: fieldA.id,
       title: 'Tractor 250-hour service',
       description: 'Oil & filter change, air filter clean, hydraulic fluid top-up. Log in maintenance sheet.',
       due_date: daysAhead(14),
