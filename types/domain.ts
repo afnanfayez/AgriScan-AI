@@ -101,6 +101,7 @@ export interface ForumPost {
   authorName: string;
   category: 'General' | 'Diseases' | 'Tips' | 'Farming Tech' | 'QA';
   likes: string[];
+  replyCount?: number;
   createdAt: string;
 }
 

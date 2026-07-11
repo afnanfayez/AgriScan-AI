@@ -6,6 +6,7 @@ import { ServiceError } from '../errors';
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface OnboardInput {
+  name?: string;
   accountType?: AccountType;
   location?: string;
   units?: string;
@@ -29,10 +30,12 @@ export async function onboardUser(
   user: SupabaseUserProfile,
   input: OnboardInput
 ): Promise<OnboardResult> {
-  const { accountType, location, units, plan, firstFarmName } = input;
+  const { name, accountType, location, units, plan, firstFarmName } = input;
+  const nextName = typeof name === 'string' ? name.trim() : undefined;
 
   // Update user properties in public.profiles
   const updateData: any = {};
+  if (nextName) updateData.name = nextName;
   if (accountType) updateData.account_type = accountType;
   if (location !== undefined) updateData.location = location;
   if (units) updateData.units = units;
@@ -40,14 +43,34 @@ export async function onboardUser(
 
   const { data: profile, error: updateError } = await supabase
     .from('profiles')
-    .update(updateData)
-    .eq('id', user.id)
+    .upsert(
+      {
+        id: user.id,
+        email: user.email,
+        ...updateData,
+      },
+      { onConflict: 'id' }
+    )
     .select()
     .single();
 
   if (updateError) {
     console.error('Failed to update profile:', updateError);
     throw new ServiceError(updateError.message, 400);
+  }
+
+  const authMetadata: Record<string, string> = {};
+  if (nextName) authMetadata.name = nextName;
+  if (accountType) authMetadata.account_type = accountType;
+  if (profile.avatar_url) authMetadata.avatar_url = profile.avatar_url;
+
+  if (Object.keys(authMetadata).length > 0) {
+    const { error: authUpdateError } = await supabase.auth.updateUser({
+      data: authMetadata,
+    });
+    if (authUpdateError) {
+      console.error('Failed to update auth metadata:', authUpdateError);
+    }
   }
 
   // Create a real farm/field record linked to the user

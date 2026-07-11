@@ -13,6 +13,7 @@ const mapPost = (p: any): ForumPost => ({
   content: p.content,
   category: p.category,
   likes: p.likes || [],
+  replyCount: p.reply_count || 0,
   createdAt: p.created_at,
 });
 
@@ -53,7 +54,28 @@ export async function listPosts(supabase: SupabaseClient, category?: string | nu
     throw new ServiceError(error.message, 500);
   }
 
-  return (postsData || []).map(mapPost);
+  const posts = postsData || [];
+  if (posts.length === 0) {
+    return [];
+  }
+
+  const postIds = posts.map((post) => post.id);
+  const { data: commentsData, error: commentsError } = await supabase
+    .from('forum_comments')
+    .select('post_id')
+    .in('post_id', postIds);
+
+  if (commentsError) {
+    console.error('Error fetching forum reply counts:', commentsError);
+    return posts.map(mapPost);
+  }
+
+  const replyCounts = (commentsData || []).reduce<Record<string, number>>((counts, comment) => {
+    counts[comment.post_id] = (counts[comment.post_id] || 0) + 1;
+    return counts;
+  }, {});
+
+  return posts.map((post) => mapPost({ ...post, reply_count: replyCounts[post.id] || 0 }));
 }
 
 export async function toggleLike(
