@@ -143,7 +143,7 @@ function ForgotPasswordForm() {
     return (
       <AuthLayout>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <button onClick={() => router.push('/forgot-password')} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 text-xs mb-6 cursor-pointer transition-colors">
+          <button onClick={() => router.push('/forgot-password')} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 text-xs mb-6 cursor-pointer transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Back</span>
           </button>
@@ -153,21 +153,21 @@ function ForgotPasswordForm() {
               <Mail className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-stone-900 tracking-tight">Check your email</h2>
-              <p className="text-xs text-stone-500 mt-0.5">Enter the 6-digit code sent to <span className="text-emerald-600 font-medium">{resetEmail}</span></p>
+              <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Check your email</h2>
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the 6-digit code sent to <span className="text-emerald-600 dark:text-emerald-400 font-medium">{resetEmail}</span></p>
             </div>
           </div>
 
           {authError && (
-            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <span className="text-xs text-red-600">{authError}</span>
+            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
             </motion.div>
           )}
 
           <div className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 text-center">6-digit reset code</label>
+              <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-3 text-center">6-digit reset code</label>
               <div className="flex items-center justify-center space-x-2">
                 {resetOtpDigits.map((d, i) => (
                   <input
@@ -177,8 +177,7 @@ function ForgotPasswordForm() {
                     onChange={(e) => handleOtpChange(i, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     onPaste={handleOtpPaste}
-                    className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none"
-                    style={d ? { background: '#f0fdf4', borderColor: '#059669', color: '#064e3b' } : { background: '#f9fafb', borderColor: '#d1d5db', color: '#111827' }}
+                    className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
                   />
                 ))}
               </div>
@@ -197,8 +196,7 @@ function ForgotPasswordForm() {
               <button
                 onClick={handleResendResetOtp}
                 disabled={resendCooldown > 0}
-                className="flex items-center space-x-1.5 text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
-                style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
+                className={`flex items-center space-x-1.5 text-xs transition-colors cursor-pointer disabled:cursor-not-allowed ${resendCooldown > 0 ? 'text-stone-400 dark:text-slate-650' : 'text-emerald-600 dark:text-emerald-450'}`}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
@@ -219,34 +217,34 @@ function ForgotPasswordForm() {
               <ShieldCheck className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-stone-900 tracking-tight">Set new password</h2>
-              <p className="text-xs text-stone-500 mt-0.5">Code verified ✅ — Choose a strong new password</p>
+              <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Set new password</h2>
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Code verified ✅ — Choose a strong new password</p>
             </div>
           </div>
 
           {authError && (
-            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <span className="text-xs text-red-600">{authError}</span>
+            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
             </motion.div>
           )}
           {authSuccess && (
-            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start space-x-2">
-              <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span className="text-xs text-emerald-700">{authSuccess}</span>
+            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 rounded-xl flex items-start space-x-2">
+              <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-emerald-700 dark:text-emerald-300">{authSuccess}</span>
             </motion.div>
           )}
 
           <div className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">New Password</label>
+              <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">New Password</label>
               <div className="relative">
                 <input type={showNewPassword ? 'text' : 'password'} value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setAuthError(''); }}
                   placeholder="Min. 8 characters"
-                  className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                  className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 />
-                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 transition-colors cursor-pointer">
                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -272,7 +270,7 @@ function ForgotPasswordForm() {
   return (
     <AuthLayout>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <button onClick={() => router.push('/login')} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 text-xs mb-6 cursor-pointer transition-colors">
+        <button onClick={() => router.push('/login')} className="flex items-center space-x-1.5 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 text-xs mb-6 cursor-pointer transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Back to sign in</span>
         </button>
@@ -282,25 +280,25 @@ function ForgotPasswordForm() {
             <KeyRound className="h-6 w-6 text-amber-500" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-stone-900 tracking-tight">Forgot password?</h2>
-            <p className="text-xs text-stone-500 mt-0.5">We&apos;ll send a reset code to your email</p>
+            <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Forgot password?</h2>
+            <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">We&apos;ll send a reset code to your email</p>
           </div>
         </div>
 
         {authError && (
-          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-            <span className="text-xs text-red-600">{authError}</span>
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
           </motion.div>
         )}
 
         <form onSubmit={handleRequestReset} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Registered Email Address</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Registered Email Address</label>
             <input type="email" required value={resetEmail}
               onChange={(e) => { setResetEmail(e.target.value); setAuthError(''); }}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
             />
           </div>
 

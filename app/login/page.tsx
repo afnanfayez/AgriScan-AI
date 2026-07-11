@@ -46,42 +46,42 @@ export default function LoginPage() {
             </div>
             <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">AgriScan AI</span>
           </div>
-          <h2 className="text-3xl font-bold text-stone-900 tracking-tight mt-4">Welcome back</h2>
-          <p className="text-sm text-stone-500 mt-1">Sign in to your farm dashboard</p>
+          <h2 className="text-3xl font-bold text-stone-900 dark:text-slate-50 tracking-tight mt-4">Welcome back</h2>
+          <p className="text-sm text-stone-500 dark:text-slate-400 mt-1">Sign in to your farm dashboard</p>
         </div>
 
         {authError && (
-          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-            <span className="text-xs text-red-600">{authError}</span>
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
           </motion.div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Email Address</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
             <input
               type="email" required value={email}
               onChange={(e) => { setEmail(e.target.value); setAuthError(''); }}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Password</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'} required value={password}
                 onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 transition-colors cursor-pointer">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             <div className="mt-1.5 text-right">
-              <Link href="/forgot-password" className="text-xs text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer font-medium">
+              <Link href="/forgot-password" className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer font-medium">
                 Forgot password?
               </Link>
             </div>
@@ -95,9 +95,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-stone-100 text-center text-xs text-stone-400">
+        <div className="mt-6 pt-5 border-t border-stone-100 dark:border-slate-800 text-center text-xs text-stone-400 dark:text-slate-500">
           New to AgriScan?{' '}
-          <Link href="/register" className="text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer transition-colors">
+          <Link href="/register" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold cursor-pointer transition-colors">
             Create farm account →
           </Link>
         </div>

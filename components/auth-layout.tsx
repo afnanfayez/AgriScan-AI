@@ -4,8 +4,15 @@ import React from 'react';
 import { Sprout, ShieldCheck, Sparkles, CloudSun } from 'lucide-react';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  React.useEffect(() => {
+    const storedTheme = localStorage.getItem('agriscan.theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const shouldUseDark = storedTheme ? storedTheme === 'dark' : prefersDark;
+    document.documentElement.classList.toggle('dark', shouldUseDark);
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row font-sans bg-white dark:bg-slate-950 transition-colors duration-200">
       {/* ── LEFT BRAND PANEL — 3D animated dark ── */}
       <div className="hidden md:flex flex-col justify-between w-[480px] shrink-0 p-12 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #0a1f0f 0%, #0d2b1a 60%, #0f1f2e 100%)' }}>
         {/* Animated floating 3D leaf/globe orbs */}
@@ -147,8 +154,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
 
-      {/* ── RIGHT AUTH PANEL — white ── */}
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-white">
+      {/* ── RIGHT AUTH PANEL ── */}
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 transition-colors duration-200">
         <div className="w-full max-w-md">{children}</div>
       </div>
     </div>

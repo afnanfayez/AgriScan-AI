@@ -135,20 +135,20 @@ function RegisterForm() {
               <Mail className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-stone-900 tracking-tight">Check your inbox</h2>
-              <p className="text-xs text-stone-500 mt-0.5">Enter the 6-digit code sent to <strong>{emailFromUrl}</strong></p>
+              <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Check your inbox</h2>
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the 6-digit code sent to <strong className="text-stone-900 dark:text-slate-200">{emailFromUrl}</strong></p>
             </div>
           </div>
 
           {authError && (
-            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <span className="text-xs text-red-600">{authError}</span>
+            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
             </motion.div>
           )}
 
           <div className="mb-6">
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 text-center">6-digit verification code</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 tracking-wider mb-3 text-center uppercase">6-digit verification code</label>
             <div className="flex items-center justify-center space-x-2">
               {otpDigits.map((d, i) => (
                 <input
@@ -161,8 +161,7 @@ function RegisterForm() {
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={handleOtpPaste}
-                  className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none"
-                  style={d ? { background: '#f0fdf4', borderColor: '#059669', color: '#064e3b' } : { background: '#f9fafb', borderColor: '#d1d5db', color: '#111827' }}
+                  className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
                 />
               ))}
             </div>
@@ -178,15 +177,14 @@ function RegisterForm() {
           </button>
 
           <div className="mt-5 flex items-center justify-between text-xs">
-            <button onClick={() => router.push('/register')} className="flex items-center space-x-1 text-stone-400 hover:text-stone-600 cursor-pointer transition-colors">
+            <button onClick={() => router.push('/register')} className="flex items-center space-x-1 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 cursor-pointer transition-colors">
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back</span>
             </button>
             <button
               onClick={handleResendOtp}
               disabled={resendCooldown > 0}
-              className="flex items-center space-x-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed"
-              style={{ color: resendCooldown > 0 ? '#9ca3af' : '#059669' }}
+              className={`flex items-center space-x-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed ${resendCooldown > 0 ? 'text-stone-400 dark:text-slate-600' : 'text-emerald-600 dark:text-emerald-400'}`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${resendCooldown > 0 ? '' : 'hover:rotate-180 transition-transform duration-500'}`} />
               <span>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}</span>
@@ -207,43 +205,43 @@ function RegisterForm() {
             </div>
             <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">AgriScan AI</span>
           </div>
-          <h2 className="text-3xl font-bold text-stone-900 tracking-tight mt-4">Create account</h2>
-          <p className="text-sm text-stone-500 mt-1">Set up your farm dashboard today</p>
+          <h2 className="text-3xl font-bold text-stone-900 dark:text-slate-50 tracking-tight mt-4">Create account</h2>
+          <p className="text-sm text-stone-500 dark:text-slate-400 mt-1">Set up your farm dashboard today</p>
         </div>
 
         {authError && (
-          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-            <span className="text-xs text-red-600">{authError}</span>
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl flex items-start space-x-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <span className="text-xs text-red-600 dark:text-red-400">{authError}</span>
           </motion.div>
         )}
 
         <form onSubmit={handleSignupSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Full Name</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
             <input type="text" required value={name}
               onChange={(e) => { setName(e.target.value); setAuthError(''); }}
               placeholder="e.g. John Green"
-              className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Email Address</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
             <input type="email" required value={email}
               onChange={(e) => { setEmail(e.target.value); setAuthError(''); }}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Password</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
             <div className="relative">
               <input type={showPassword ? 'text' : 'password'} required value={password}
                 onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
                 placeholder="Min. 8 characters"
-                className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                className="w-full px-4 py-3 pr-12 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:text-slate-500 dark:hover:text-slate-350 transition-colors cursor-pointer">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
@@ -251,19 +249,19 @@ function RegisterForm() {
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-2">
                 <div className="flex space-x-1">
                   {[1,2,3,4,5].map((i) => (
-                    <div key={i} className="flex-1 h-1.5 rounded-full transition-all duration-300" style={{ background: pwStrength >= i ? (pwStrength <= 2 ? '#ef4444' : pwStrength <= 3 ? '#f59e0b' : '#10b981') : '#e5e7eb' }} />
+                    <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${pwStrength >= i ? (pwStrength <= 2 ? 'bg-red-500' : pwStrength <= 3 ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-stone-200 dark:bg-slate-800'}`} />
                   ))}
                 </div>
-                <p className="text-[11px] mt-1 font-medium" style={{ color: pwStrength <= 2 ? '#ef4444' : pwStrength <= 3 ? '#f59e0b' : '#059669' }}>
+                <p className={`text-[11px] mt-1 font-medium ${pwStrength <= 2 ? 'text-red-500' : pwStrength <= 3 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                   {pwStrength <= 2 ? 'Weak password' : pwStrength <= 3 ? 'Fair password' : pwStrength === 4 ? 'Strong password' : 'Very strong password'}
                 </p>
               </motion.div>
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Operation Type</label>
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Operation Type</label>
             <select value={accountType} onChange={(e: any) => setAccountType(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all appearance-none cursor-pointer"
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 text-stone-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all appearance-none cursor-pointer"
               style={{ backgroundImage: 'none' }}
             >
               <option value="Gardener">🌱 Home / Hobbyist Gardener</option>
@@ -281,9 +279,9 @@ function RegisterForm() {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-stone-100 text-center text-xs text-stone-400">
+        <div className="mt-6 pt-5 border-t border-stone-100 dark:border-slate-800 text-center text-xs text-stone-400 dark:text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer transition-colors">
+          <Link href="/login" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold cursor-pointer transition-colors">
             Sign in →
           </Link>
         </div>
