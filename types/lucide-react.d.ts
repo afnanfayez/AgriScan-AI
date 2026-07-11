@@ -46,6 +46,21 @@ declare module 'lucide-react' {
   export const Mail: Icon;
   export const Trash: Icon;
   export const Trash2: Icon;
+  // New role dashboards (Commercial Farmer / Nursery Operator / Agribusiness)
+  export const Map: Icon;
+  export const ChartLine: Icon;
+  export const ClipboardList: Icon;
+  export const Boxes: Icon;
+  export const Truck: Icon;
+  export const ChartPie: Icon;
+  export const Building2: Icon;
+  export const ChartBar: Icon;
+  export const UsersRound: Icon;
+  export const FileCheck: Icon;
+  export const Minus: Icon;
+  export const TrendingDown: Icon;
+  export const DollarSign: Icon;
+  export const ArrowRight: Icon;
   // Fallback for other icons if needed
   const icons: { [key: string]: Icon };
   export default icons;

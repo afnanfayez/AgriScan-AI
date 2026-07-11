@@ -1,8 +1,20 @@
-import { CloudSun, Sprout, Camera, Heart, Users, Settings, type Icon } from 'lucide-react';
+import {
+  CloudSun, Sprout, Camera, Heart, Users, Settings, type Icon,
+  Map, ChartLine, Droplets, ClipboardList,
+  Boxes, ShieldCheck, Truck, ChartPie,
+  Building2, ChartBar, UsersRound, KeyRound, FileCheck,
+} from 'lucide-react';
 import type { AccountType } from '@/types/domain';
 
 export interface DashboardTabConfig {
-  id: 'dashboard' | 'plants' | 'scan' | 'treatments' | 'community' | 'settings';
+  id:
+    | 'dashboard' | 'plants' | 'scan' | 'treatments' | 'community' | 'settings'
+    // Commercial Farmer
+    | 'fieldmap' | 'analytics' | 'irrigation' | 'labor'
+    // Nursery Operator
+    | 'batches' | 'grading' | 'orders' | 'reports'
+    // Agribusiness
+    | 'multifarm' | 'team' | 'apikeys' | 'compliance';
   label: string;
   icon: Icon;
   accent?: boolean;
@@ -34,11 +46,12 @@ export const ROLE_CONFIG: Record<AccountType, RoleConfig> = {
   },
   Farmer: {
     tabs: [
-      { id: 'dashboard', label: 'Operations', icon: CloudSun },
-      { id: 'plants', label: 'Fields & Crops', icon: Sprout },
-      { id: 'scan', label: 'Crop Diagnostics', icon: Camera, accent: true },
-      { id: 'treatments', label: 'Treatment Plans', icon: Heart },
-      { id: 'community', label: 'Community', icon: Users },
+      { id: 'dashboard', label: 'Farm Overview', icon: CloudSun },
+      { id: 'fieldmap', label: 'Field Map', icon: Map },
+      { id: 'scan', label: 'Crop Scanner', icon: Camera, accent: true },
+      { id: 'analytics', label: 'Yield & Risk Analytics', icon: ChartLine },
+      { id: 'irrigation', label: 'Irrigation & Inputs', icon: Droplets },
+      { id: 'labor', label: 'Labor/Tasks', icon: ClipboardList },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
     overviewTitle: 'Farm Operations Overview',
@@ -48,25 +61,27 @@ export const ROLE_CONFIG: Record<AccountType, RoleConfig> = {
   },
   Nursery: {
     tabs: [
-      { id: 'dashboard', label: 'Inventory Snapshot', icon: CloudSun },
-      { id: 'plants', label: 'Stock', icon: Sprout },
-      { id: 'scan', label: 'Health Check', icon: Camera, accent: true },
-      { id: 'treatments', label: 'Treatment Plans', icon: Heart },
-      { id: 'community', label: 'Community', icon: Users },
+      { id: 'dashboard', label: 'Inventory Overview', icon: CloudSun },
+      { id: 'batches', label: 'Batches', icon: Boxes },
+      { id: 'scan', label: 'Health Screening', icon: Camera, accent: true },
+      { id: 'grading', label: 'Quality Grading', icon: ShieldCheck },
+      { id: 'orders', label: 'Orders & Dispatch', icon: Truck },
+      { id: 'reports', label: 'Loss & Turnover Reports', icon: ChartPie },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
-    overviewTitle: 'Inventory Snapshot',
+    overviewTitle: 'Inventory Overview',
     overviewSubtitle: 'Current stock health across your growing sites.',
     locationLabel: 'Site',
     planBadgeLabel: 'Plan',
   },
   Agribusiness: {
     tabs: [
-      { id: 'dashboard', label: 'Portfolio Overview', icon: CloudSun },
-      { id: 'plants', label: 'Crop Portfolio', icon: Sprout },
-      { id: 'scan', label: 'Diagnostics', icon: Camera, accent: true },
-      { id: 'treatments', label: 'Treatment Plans', icon: Heart },
-      { id: 'community', label: 'Community', icon: Users },
+      { id: 'dashboard', label: 'Enterprise Dashboard', icon: Building2 },
+      { id: 'multifarm', label: 'Multi-Farm Manager', icon: Map },
+      { id: 'analytics', label: 'Cross-Farm Analytics', icon: ChartBar },
+      { id: 'team', label: 'Team & Roles Management', icon: UsersRound },
+      { id: 'apikeys', label: 'API & Integrations', icon: KeyRound },
+      { id: 'compliance', label: 'Compliance & Audit Reports', icon: FileCheck },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
     overviewTitle: 'Portfolio Overview',

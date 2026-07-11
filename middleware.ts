@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/utils/supabase/middleware";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/My-Plants", "/Plant-Doctor", "/Care-Plans", "/Community", "/Settings"];
+const PROTECTED_PREFIXES = [
+  "/dashboard", "/My-Plants", "/Plant-Doctor", "/Care-Plans", "/Community", "/Settings",
+  // Commercial Farmer
+  "/Field-Map", "/Crop-Scanner", "/Yield-Analytics", "/Irrigation", "/Labor",
+  // Nursery Operator
+  "/Batches", "/Health-Screening", "/Quality-Grading", "/Orders", "/Loss-Reports",
+  // Agribusiness
+  "/Multi-Farm", "/Cross-Farm-Analytics", "/Team", "/Api-Integrations", "/Compliance",
+];
 const AUTH_ONLY_PREFIXES = ["/login", "/register"];
 
 /**
