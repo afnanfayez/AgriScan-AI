@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { uploadImageToStorage } from '@/lib/supabase';
 import type { SupabaseUserProfile } from '@/lib/auth';
 import type { PlantCrop } from '@/types/domain';
 import { ServiceError } from './errors';
@@ -54,53 +55,6 @@ export async function listPlants(
     userPlants = userPlants.filter((p) => p.name.toLowerCase().includes(q) || p.type.toLowerCase().includes(q));
   }
 
-  // If no plants exist, let's seed 3 realistic plants for the user
-  if (userPlants.length === 0 && (!farmId || farmId === 'all') && (!healthStatus || healthStatus === 'all') && !search) {
-    const { data: farmsData } = await supabase.from('farms').select('id');
-    const targetFarmId = farmsData?.[0]?.id || null;
-
-    const seedPlants = [
-      {
-        name: 'Golden Jubilee Tomato',
-        type: 'Tomato',
-        planting_date: '2026-04-15',
-        health_status: 'Healthy',
-        photo_url: 'https://picsum.photos/seed/tomato-plant/400/300',
-        farm_id: targetFarmId,
-        user_id: user.id,
-      },
-      {
-        name: 'Red Rover Rose Bush',
-        type: 'Rose',
-        planting_date: '2026-05-10',
-        health_status: 'Warning',
-        photo_url: 'https://picsum.photos/seed/rose-plant/400/300',
-        farm_id: targetFarmId,
-        user_id: user.id,
-      },
-      {
-        name: 'Dwarf Cavendish Banana',
-        type: 'Banana',
-        planting_date: '2026-03-01',
-        health_status: 'Critical',
-        photo_url: 'https://picsum.photos/seed/banana-plant/400/300',
-        farm_id: targetFarmId,
-        user_id: user.id,
-      },
-    ];
-
-    const { data: insertedSeeds, error: seedError } = await supabase
-      .from('plants')
-      .insert(seedPlants)
-      .select();
-
-    if (seedError) {
-      console.error('Error seeding default plants:', seedError);
-    } else if (insertedSeeds) {
-      userPlants = insertedSeeds.map(mapPlant);
-    }
-  }
-
   return userPlants;
 }
 
@@ -126,6 +80,12 @@ export async function createPlant(
     targetFarmId = farmsData?.[0]?.id || null;
   }
 
+  let storedPhotoUrl = photoUrl || null;
+  if (photoUrl?.startsWith('data:')) {
+    const uploadedUrl = await uploadImageToStorage(photoUrl, `plants/${user.id}/${Date.now()}.jpg`, 'agriscan');
+    storedPhotoUrl = uploadedUrl || photoUrl;
+  }
+
   const { data: newPlant, error: plantError } = await supabase
     .from('plants')
     .insert({
@@ -133,7 +93,7 @@ export async function createPlant(
       type,
       planting_date: plantingDate,
       health_status: 'Healthy',
-      photo_url: photoUrl || `https://picsum.photos/seed/${name}/400/300`,
+      photo_url: storedPhotoUrl,
       farm_id: targetFarmId,
       user_id: user.id,
     })

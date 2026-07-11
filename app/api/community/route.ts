@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
-import { createClient } from '@/utils/supabase/server';
+import { getSupabaseAdminClient } from '@/lib/supabase';
 import { listCommentsForPost, listPosts, toggleLike, addComment, createPost } from '@/services/community-service';
 import { ServiceError } from '@/services/errors';
 
@@ -10,8 +10,7 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get('category');
     const postId = searchParams.get('postId');
 
-    await getSessionUser();
-    const supabase = await createClient();
+    const supabase = getSupabaseAdminClient();
 
     // If requesting comments for a specific post
     if (postId) {
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const supabase = await createClient();
+    const supabase = getSupabaseAdminClient();
 
     // 1. Like action
     if (body.action === 'like') {

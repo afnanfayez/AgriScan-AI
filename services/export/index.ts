@@ -3,7 +3,7 @@ import type { SupabaseUserProfile } from '@/lib/auth';
 import { ServiceError } from '../errors';
 import { buildCsvReport } from './csv';
 import { buildXlsxReport } from './xlsx';
-import { buildHtmlReport } from './html-report';
+import { buildPdfReport } from './pdf';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -58,9 +58,9 @@ export async function generateExport(
 
   if (format === 'pdf') {
     return {
-      body: buildHtmlReport(exportData),
-      contentType: 'text/html; charset=utf-8',
-      contentDisposition: 'inline; filename="AgriScan_Farm_Report.html"',
+      body: buildPdfReport(exportData),
+      contentType: 'application/pdf',
+      contentDisposition: 'attachment; filename="AgriScan_Farm_Report.pdf"',
     };
   }
 

@@ -25,66 +25,19 @@ const mapComment = (c: any): ForumComment => ({
   createdAt: c.created_at,
 });
 
-const staticPostsFallback: ForumPost[] = [
-  {
-    id: 'post-static-1',
-    title: 'Welcome to AgriScan AI Forum!',
-    content: 'Share pictures of your crop foliage, discuss organic pest control remedies, and connect with certified agronomists here!',
-    userId: 'admin-id',
-    authorName: 'AgriScan Pathologist',
-    category: 'General',
-    likes: ['user-like-1', 'user-like-2'],
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    id: 'post-static-2',
-    title: 'Help! Spotted lesions on my Golden Jubilee Tomato leaves',
-    content: 'I noticed small brown spots with concentric rings on my lower tomato leaves. Is this early blight or nutrient deficiency?',
-    userId: 'user-id-2',
-    authorName: 'Alex Mercer (Gardener)',
-    category: 'Diseases',
-    likes: ['user-like-1'],
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-  },
-  {
-    id: 'post-static-3',
-    title: 'Certified Organic Neem Oil spray recipe',
-    content: 'Mix 1.5 teaspoons of pure cold-pressed neem oil with 1/2 teaspoon of mild organic liquid soap in 1 quart of warm water. Spray leaves thoroughly!',
-    userId: 'user-id-3',
-    authorName: 'Dr. Helen Peterson',
-    category: 'QA',
-    likes: ['user-like-1', 'user-like-2', 'user-like-3'],
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-];
-
-const staticCommentsFallback: Record<string, ForumComment[]> = {
-  'post-static-2': [
-    {
-      id: 'cmt-static-1',
-      postId: 'post-static-2',
-      content: 'Concentric rings suggest Early Blight (Alternaria solani). Cut away the lowest yellowed leaves immediately and keep them off the soil!',
-      userId: 'expert-id-1',
-      authorName: 'Dr. Helen Peterson',
-      createdAt: new Date(Date.now() - 3600000 * 10).toISOString(),
-    },
-  ],
-};
-
 export async function listCommentsForPost(supabase: SupabaseClient, postId: string): Promise<ForumComment[]> {
-  const { data: commentsData } = await supabase
+  const { data: commentsData, error } = await supabase
     .from('forum_comments')
     .select('*')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
 
-  let comments = (commentsData || []).map(mapComment);
-
-  if (comments.length === 0 && staticCommentsFallback[postId]) {
-    comments = staticCommentsFallback[postId];
+  if (error) {
+    console.error('Error fetching forum comments:', error);
+    throw new ServiceError(error.message, 500);
   }
 
-  return comments;
+  return (commentsData || []).map(mapComment);
 }
 
 export async function listPosts(supabase: SupabaseClient, category?: string | null): Promise<ForumPost[]> {
@@ -97,19 +50,10 @@ export async function listPosts(supabase: SupabaseClient, category?: string | nu
 
   if (error) {
     console.error('Error fetching forum posts:', error);
-    return staticPostsFallback;
+    throw new ServiceError(error.message, 500);
   }
 
-  let posts = (postsData || []).map(mapPost);
-
-  if (posts.length === 0) {
-    posts = staticPostsFallback;
-    if (category && category !== 'all') {
-      posts = posts.filter((p) => p.category === category);
-    }
-  }
-
-  return posts;
+  return (postsData || []).map(mapPost);
 }
 
 export async function toggleLike(
