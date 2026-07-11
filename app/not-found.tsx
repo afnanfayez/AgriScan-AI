@@ -2,12 +2,12 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-800 p-6 font-sans text-center">
-      <div className="p-3 bg-stone-100 rounded-2xl mb-4 border border-stone-200">
-        <span className="text-sm font-mono font-bold text-stone-500">404</span>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 dark:bg-slate-950 text-stone-800 dark:text-slate-100 p-6 font-sans text-center transition-colors duration-200">
+      <div className="p-3 bg-stone-100 dark:bg-slate-900 rounded-2xl mb-4 border border-stone-200 dark:border-slate-800">
+        <span className="text-sm font-mono font-bold text-stone-500 dark:text-slate-400">404</span>
       </div>
-      <h1 className="text-2xl font-semibold tracking-tight text-stone-950">Resource Not Found</h1>
-      <p className="mt-2 text-xs text-stone-500 max-w-sm leading-relaxed">
+      <h1 className="text-2xl font-semibold tracking-tight text-stone-950 dark:text-slate-50">Resource Not Found</h1>
+      <p className="mt-2 text-xs text-stone-500 dark:text-slate-400 max-w-sm leading-relaxed">
         The Farm dashboard layout, crop details, or analytics section you requested could not be resolved.
       </p>
       <Link 
