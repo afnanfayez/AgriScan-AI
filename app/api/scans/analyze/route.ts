@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { image, plantId } = await req.json();
 
     if (!image) {
-      return NextResponse.json({ error: 'No leaf image provided' }, { status: 400 });
+      return NextResponse.json({ error: 'No plant image provided' }, { status: 400 });
     }
 
     if (!plantId) {

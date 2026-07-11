@@ -97,12 +97,15 @@ export async function analyzeScan(
     });
 
     const promptText = `
-      Analyze this agricultural plant photo for disease, pests, abiotic stress, or healthy status.
+      Analyze this agricultural plant image for disease, pests, nutrient deficiency, abiotic stress, physical injury, or healthy status.
       Registered plant name: "${plant.name}".
       Registered plant type/cultivar: "${plant.type}".
 
-      Only diagnose what is visible or reasonably inferable from the image. If image quality is poor or the subject is not a plant, say so in the diagnosis and keep confidence low.
+      The image may show the whole plant or any visible plant part, including leaves, stems, fruit, flowers, roots, soil-line crown, canopy, or field row context.
+      First identify the visible plant organ(s) and visible evidence. Only diagnose what is visible or reasonably inferable from the image and the registered crop type.
+      If image quality is poor, the plant part is too distant/occluded, or the subject is not a plant, say so in the diagnosis and keep confidence low.
       Return practical organic and chemical/control recommendations. If healthy, return maintenance recommendations and "No chemical treatment required."
+      Avoid claiming laboratory certainty. Mention uncertainty when symptoms overlap across diseases, pests, or nutrient/irrigation issues.
 
       You MUST respond ONLY with a JSON object in this exact structure:
       {
@@ -158,7 +161,7 @@ export async function analyzeScan(
     throw new ServiceError(geminiError.message || 'Gemini analysis failed', 502);
   }
 
-  // Upload leaf photo to Supabase Storage
+  // Upload plant inspection photo to Supabase Storage
   const storageFileName = `scans/${user.id}/${Date.now()}.jpg`;
   const storageUrl = await uploadImageToStorage(image, storageFileName, 'agriscan');
   const finalImageUrl = storageUrl || (image.startsWith('data:') ? image : `data:${mimeType};base64,${image}`);
@@ -216,19 +219,33 @@ export async function analyzeScan(
   if (plantUpdateError) console.error('Error updating plant status:', plantUpdateError);
 
   // Add a note in notes table
+  const mismatchFlag = /mismatch|wrong plant|different plant|not match|does not match|specimen/i.test(`${diagnosis} ${symptoms}`);
+  const organicSummary = organicSteps.length ? organicSteps.map((step, index) => `${index + 1}. ${step}`).join('\n') : 'No organic steps returned.';
+  const chemicalSummary = chemicalSteps.length ? chemicalSteps.map((step, index) => `${index + 1}. ${step}`).join('\n') : 'No chemical controls returned.';
   const { error: noteError } = await supabase
     .from('notes')
     .insert({
       plant_id: plantId,
       user_id: user.id,
-      content: `AI Scan completed. Diagnosis: ${diagnosis} (${confidence}% confidence, ${severity} severity). Plant status updated to ${nextStatus}.`,
+      photo_url: finalImageUrl,
+      content: [
+        `AI Scan completed for ${plant.name}.`,
+        `Diagnosis: ${diagnosis}`,
+        `Confidence: ${confidence}%`,
+        `Severity: ${severity}`,
+        `Plant status updated to: ${nextStatus}`,
+        mismatchFlag ? 'Important: Gemini indicated the image may not match the selected plant record. Review the saved scan image before applying treatment.' : '',
+        `Visible evidence: ${symptoms}`,
+        `Organic steps:\n${organicSummary}`,
+        `Chemical controls:\n${chemicalSummary}`,
+      ].filter(Boolean).join('\n\n'),
     });
 
   if (noteError) console.error('Error creating scan log note:', noteError);
 
   // Add notification about diagnosis
   let notifTitle = `Scan Clear: ${plant.name}`;
-  let notifMessage = `Your "${plant.name}" is healthy! Spore count is clear and leaves show optimal moisture.`;
+  let notifMessage = `Your "${plant.name}" appears healthy in the submitted plant image.`;
 
   if (diagnosis !== 'Healthy') {
     notifTitle = `Disease Alert: ${diagnosis}`;
