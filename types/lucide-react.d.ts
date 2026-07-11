@@ -44,6 +44,8 @@ declare module 'lucide-react' {
   export const ArrowLeft: Icon;
   export const RefreshCw: Icon;
   export const Mail: Icon;
+  export const Trash: Icon;
+  export const Trash2: Icon;
   // Fallback for other icons if needed
   const icons: { [key: string]: Icon };
   export default icons;

@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth-context';
 import DashboardShell from '@/components/dashboard/dashboard-shell';
 import { ROLE_CONFIG } from '@/components/dashboard/role-config';
+import CarePlansSection from '@/components/dashboard/care-plans-section';
+import CommunitySection from '@/components/dashboard/community-section';
+import SettingsSection from '@/components/dashboard/settings-section';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sprout,
@@ -34,9 +37,23 @@ import {
   TrendingUp,
   Sliders,
   Sparkles,
+  Trash,
 } from 'lucide-react';
 
-export default function DashboardPage() {
+const TAB_ROUTES: Record<string, string> = {
+  dashboard: '/dashboard',
+  plants: '/My-Plants',
+  scan: '/Plant-Doctor',
+  treatments: '/Care-Plans',
+  community: '/Community',
+  settings: '/Settings',
+};
+
+const ROUTE_TABS: Record<string, string> = Object.fromEntries(
+  Object.entries(TAB_ROUTES).map(([tab, path]) => [path.toLowerCase(), tab])
+);
+
+function DashboardContent() {
   const {
     user,
     isLoading,
@@ -55,8 +72,27 @@ export default function DashboardPage() {
   } = useAuth();
 
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const plantIdParam = searchParams.get('plantId');
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Synchronize plantId from URL search params to AuthContext selectedPlantId
+  useEffect(() => {
+    if (plantIdParam) {
+      if (selectedPlantId !== plantIdParam) {
+        setSelectedPlantId(plantIdParam);
+      }
+      if (activeTab !== 'plants' && activeTab !== 'scan') {
+        setActiveTab('plants');
+      }
+    } else {
+      if (selectedPlantId && activeTab === 'plants') {
+        setSelectedPlantId(null);
+      }
+    }
+  }, [plantIdParam, selectedPlantId, activeTab, setSelectedPlantId, setActiveTab]);
 
   // Onboarding wizard state
   const [onboardStep, setOnboardStep] = useState(1);
@@ -107,6 +143,7 @@ export default function DashboardPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [scanError, setScanError] = useState('');
   const [scanStep, setScanStep] = useState<'select' | 'camera' | 'analyzing' | 'result'>('select');
   const [scanTargetPlantId, setScanTargetPlantId] = useState('');
   const [scanCatalogMode, setScanCatalogMode] = useState(false);
@@ -114,6 +151,11 @@ export default function DashboardPage() {
   const [scanNewPlantType, setScanNewPlantType] = useState('');
   const [expertSubmitted, setExpertSubmitted] = useState(false);
   const [expertReviewResponse, setExpertReviewResponse] = useState<any>(null);
+
+  // Care plan details + feedback
+  const [carePlanDetail, setCarePlanDetail] = useState<{ plant: any; treatment: any | null } | null>(null);
+  const [carePlanLoadingId, setCarePlanLoadingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState('');
 
   // Community State
   const [communityCategory, setCommunityCategory] = useState<'all' | 'Diseases' | 'Tips' | 'General' | 'Farming Tech'>('all');
@@ -135,11 +177,102 @@ export default function DashboardPage() {
   const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   // Video Ref for Camera
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const pushWorkspaceUrl = useCallback((url: string) => {
+    if (typeof window === 'undefined') {
+      router.push(url);
+      return;
+    }
+    window.history.pushState(null, '', url);
+  }, [router]);
+
+  const openTab = useCallback((tabId: string) => {
+    setActiveTab(tabId);
+    setSelectedPlantId(null);
+    if (tabId === 'plants') {
+      setStatusFilter('all');
+    }
+    pushWorkspaceUrl(TAB_ROUTES[tabId] || '/dashboard');
+  }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
+
+  const openPlantProfile = useCallback((plantId: string) => {
+    setStatusFilter('all');
+    setSelectedPlantId(plantId);
+    setActiveTab('plants');
+    pushWorkspaceUrl(`/My-Plants?plantId=${encodeURIComponent(plantId)}`);
+  }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
+
+  const openPlantsList = useCallback(() => {
+    setStatusFilter('all');
+    setSelectedPlantId(null);
+    setActiveTab('plants');
+    pushWorkspaceUrl('/My-Plants');
+  }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
+
+  useEffect(() => {
+    const routeTab = ROUTE_TABS[pathname.toLowerCase()];
+    if (routeTab && routeTab !== activeTab) {
+      setActiveTab(routeTab);
+      if (routeTab !== 'plants') {
+        setSelectedPlantId(null);
+      }
+      if (routeTab === 'plants') {
+        setStatusFilter('all');
+      }
+    }
+  }, [pathname, activeTab, setActiveTab, setSelectedPlantId]);
+
+  const normalizeScanImage = (source: File | HTMLVideoElement): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const maxDimension = 1600;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Browser canvas is unavailable.'));
+        return;
+      }
+
+      const drawImage = (image: HTMLImageElement | HTMLVideoElement, width: number, height: number) => {
+        const scale = Math.min(1, maxDimension / Math.max(width, height));
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      };
+
+      if (source instanceof HTMLVideoElement) {
+        if (!source.videoWidth || !source.videoHeight) {
+          reject(new Error('Camera stream is not ready yet.'));
+          return;
+        }
+        drawImage(source, source.videoWidth, source.videoHeight);
+        return;
+      }
+
+      if (!source.type.startsWith('image/')) {
+        reject(new Error('Please choose an image file.'));
+        return;
+      }
+
+      const imageUrl = URL.createObjectURL(source);
+      const image = new Image();
+      image.onload = () => {
+        drawImage(image, image.naturalWidth, image.naturalHeight);
+        URL.revokeObjectURL(imageUrl);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(imageUrl);
+        reject(new Error('Could not read this image file.'));
+      };
+      image.src = imageUrl;
+    });
+  };
 
   // Fetch Weather on load or location change
   useEffect(() => {
@@ -312,6 +445,7 @@ export default function DashboardPage() {
     if (res.success) {
       await refreshAll();
       setActiveTab('dashboard');
+      pushWorkspaceUrl('/dashboard');
     } else {
       setAuthError(res.error || 'Onboarding saving failed');
     }
@@ -363,7 +497,7 @@ export default function DashboardPage() {
       const res = await fetch(`/api/plants?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        setSelectedPlantId(null);
+        openPlantsList();
         await refreshAll();
       }
     } catch (error) {
@@ -465,6 +599,7 @@ export default function DashboardPage() {
 
   // Camera Management
   const startCamera = async () => {
+    setScanError('');
     setScanStep('camera');
     setIsCameraActive(true);
     try {
@@ -478,7 +613,7 @@ export default function DashboardPage() {
       console.error('Failed to access camera, falling back to upload:', error);
       setIsCameraActive(false);
       setScanStep('select');
-      alert('Camera access denied or unavailable. Please use the file upload fallback.');
+      setScanError('Camera access denied or unavailable. Please use photo upload instead.');
     }
   };
 
@@ -491,33 +626,36 @@ export default function DashboardPage() {
     setIsCameraActive(false);
   };
 
-  const captureSnapshot = () => {
-    if (videoRef.current && canvasRef.current) {
-      const context = canvasRef.current.getContext('2d');
-      if (context) {
-        canvasRef.current.width = videoRef.current.videoWidth;
-        canvasRef.current.height = videoRef.current.videoHeight;
-        context.drawImage(videoRef.current, 0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight);
-        const dataUrl = canvasRef.current.toDataURL('image/jpeg');
+  const captureSnapshot = async () => {
+    if (videoRef.current) {
+      try {
+        const dataUrl = await normalizeScanImage(videoRef.current);
         setCapturedImage(dataUrl);
         setAnalysisResult(null);
+        setScanError('');
         stopCamera();
         setScanStep('result');
+      } catch (error: any) {
+        setScanError(error.message || 'Could not capture the camera image.');
       }
     }
   };
 
   // File Upload fallback handler
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCapturedImage(reader.result as string);
+      try {
+        const dataUrl = await normalizeScanImage(file);
+        setCapturedImage(dataUrl);
         setAnalysisResult(null);
+        setScanError('');
         setScanStep('result');
-      };
-      reader.readAsDataURL(file);
+      } catch (error: any) {
+        setScanError(error.message || 'Could not read this image file.');
+      } finally {
+        e.target.value = '';
+      }
     }
   };
 
@@ -538,7 +676,7 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Failed to catalog crop from scan photo.');
+        setScanError(data.error || 'Failed to catalog crop from scan photo.');
         return null;
       }
 
@@ -550,7 +688,7 @@ export default function DashboardPage() {
       return data.plant.id as string;
     } catch (error) {
       console.error('Failed to catalog crop from scan photo:', error);
-      alert('An error occurred while cataloging the crop.');
+      setScanError('An error occurred while cataloging the crop.');
       return null;
     }
   };
@@ -558,8 +696,13 @@ export default function DashboardPage() {
   // Analyze Image with Gemini AI on Server Side
   const runAIAnalysis = async () => {
     if (!capturedImage) return;
+    setScanError('');
 
-    let targetPlantId = scanCatalogMode ? '' : (scanTargetPlantId || (plants[0]?.id || ''));
+    let targetPlantId = scanCatalogMode ? '' : scanTargetPlantId;
+    if (!targetPlantId && !scanCatalogMode && plants.length > 0) {
+      setScanError('Choose a target plant or catalog a new crop from this image.');
+      return;
+    }
     if (!targetPlantId) {
       setIsAnalyzing(true);
       setScanStep('analyzing');
@@ -585,15 +728,16 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.success) {
         setAnalysisResult(data);
+        setScanStep('result');
         await refreshAll();
       } else {
-        alert(data.error || 'AI Scan analysis failed');
-        setScanStep('select');
+        setScanError(data.error || 'AI scan analysis failed.');
+        setScanStep('result');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scan analysis crash:', error);
-      alert('An error occurred during leaf analysis.');
-      setScanStep('select');
+      setScanError(error.message || 'An error occurred during plant image analysis.');
+      setScanStep('result');
     } finally {
       setIsAnalyzing(false);
     }
@@ -610,9 +754,67 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.success) {
         await refreshAll();
+        return true;
       }
     } catch (error) {
       console.error('Failed to resolve treatment:', error);
+    }
+    return false;
+  };
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    window.setTimeout(() => setToastMessage(''), 3200);
+  };
+
+  const openCarePlanDetail = async (plant: any) => {
+    setCarePlanLoadingId(plant.id);
+    try {
+      const treatmentsRes = await fetch(`/api/treatments?plantId=${plant.id}`);
+      const treatmentsData = await treatmentsRes.json();
+      const treatment = treatmentsData.treatments?.find((t: any) => t.status !== 'Completed') || treatmentsData.treatments?.[0] || null;
+      setCarePlanDetail({ plant, treatment });
+    } catch (error) {
+      console.error('Failed to load care plan:', error);
+      showToast('Could not load the care plan. Please try again.');
+    } finally {
+      setCarePlanLoadingId(null);
+    }
+  };
+
+  const markPlantFullyTreated = async (plant: any, treatment?: any | null) => {
+    try {
+      const treatmentsRes = await fetch(`/api/treatments?plantId=${plant.id}`);
+      const treatmentsData = await treatmentsRes.json();
+      const openTreatments = (treatmentsData.treatments || []).filter((t: any) => t.status !== 'Completed');
+      const treatmentsToComplete = openTreatments.length > 0 ? openTreatments : (treatment?.id ? [treatment] : []);
+
+      if (treatmentsToComplete.length > 0) {
+        const results = await Promise.all(treatmentsToComplete.map((t: any) => resolveTreatment(t.id)));
+        const allCompleted = results.every(Boolean);
+        if (allCompleted) {
+          await fetch('/api/plants', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: plant.id, healthStatus: 'Healthy' }),
+          });
+          await refreshAll();
+        }
+        showToast(allCompleted ? `${plant.name} marked as fully treated.` : 'Some treatment steps could not be closed. Please try again.');
+      } else {
+        await fetch('/api/plants', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: plant.id, healthStatus: 'Healthy' }),
+        });
+        await refreshAll();
+        showToast(`${plant.name} restored to Healthy.`);
+      }
+
+      setCarePlanDetail(null);
+    } catch (error) {
+      console.error('Failed to mark plant fully treated:', error);
+      showToast('Could not complete treatment. Please try again.');
     }
   };
 
@@ -705,6 +907,13 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.success) {
         setNewCommentText('');
+        setPosts((prev) =>
+          prev.map((post) =>
+            post.id === activePostIdForComments
+              ? { ...post, replyCount: (post.replyCount || 0) + 1 }
+              : post
+          )
+        );
         fetchComments(activePostIdForComments);
       }
     } catch (error) {
@@ -717,14 +926,15 @@ export default function DashboardPage() {
     e.preventDefault();
     setSettingsError('');
     setSettingsSuccess('');
+    setSettingsSaving(true);
 
     try {
       const res = await fetch('/api/auth/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: settingsName,
-          location: settingsLocation,
+          name: settingsName.trim(),
+          location: settingsLocation.trim(),
           units: settingsUnits,
           plan: settingsPlan,
           accountType: settingsAccountType
@@ -739,6 +949,8 @@ export default function DashboardPage() {
       }
     } catch (error) {
       setSettingsError('An error occurred during update.');
+    } finally {
+      setSettingsSaving(false);
     }
   };
 
@@ -915,13 +1127,18 @@ export default function DashboardPage() {
       return new Date(b.createdAt || b.plantingDate || 0).getTime() - new Date(a.createdAt || a.plantingDate || 0).getTime();
     })
     .slice(0, 4);
+  const selectedScanPlant = plants.find((p) => p.id === scanTargetPlantId);
+  const scanNeedsCatalog = scanCatalogMode || (!scanTargetPlantId && plants.length === 0);
+  const canRunScan = !!capturedImage && (scanNeedsCatalog ? (!!scanNewPlantName.trim() && !!scanNewPlantType.trim()) : !!scanTargetPlantId);
+  const analysisText = `${analysisResult?.scan?.diagnosis || ''} ${analysisResult?.scan?.symptoms || ''}`;
+  const hasSpecimenMismatch = /mismatch|wrong plant|different plant|not match|does not match|specimen/i.test(analysisText);
 
   return (
     <>
       <DashboardShell
         user={user}
         activeTab={activeTab}
-        onTabChange={(tabId) => { setActiveTab(tabId); setSelectedPlantId(null); }}
+        onTabChange={openTab}
         weatherData={weatherData}
         onToggleNotifDrawer={() => {
           setShowNotifDrawer(!showNotifDrawer);
@@ -1106,7 +1323,7 @@ export default function DashboardPage() {
                           <h2 className="text-lg font-semibold text-stone-950 dark:text-slate-50">Crop Health Index</h2>
                           <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">Showing the four plants needing the most attention first.</p>
                         </div>
-                        <button onClick={() => setActiveTab('plants')} className="inline-flex items-center gap-1.5 self-start rounded-lg px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
+                        <button onClick={() => openTab('plants')} className="inline-flex items-center gap-1.5 self-start rounded-lg px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
                           <span>Manage inventory</span>
                           <ChevronRight className="h-3.5 w-3.5" />
                         </button>
@@ -1143,8 +1360,7 @@ export default function DashboardPage() {
                                 </span>
                                 <button
                                   onClick={() => {
-                                    setSelectedPlantId(plant.id);
-                                    setActiveTab('plants');
+                                    openPlantProfile(plant.id);
                                   }}
                                   className="rounded-lg p-2 text-stone-400 hover:bg-stone-50 hover:text-stone-800 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                                   title={`Open ${plant.name}`}
@@ -1215,25 +1431,30 @@ export default function DashboardPage() {
             {/* 2. MY PLANTS TAB */}
             {activeTab === 'plants' && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
                 className="space-y-6"
               >
                 {!selectedPlantId ? (
-                  <div>
+                  <div className="space-y-6">
                     {/* Plants List View */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <h1 className="text-2xl font-semibold tracking-tight text-stone-900">My Plants & Crops</h1>
-                        <p className="text-sm text-stone-500 mt-1">Catalog and inspect crops, vines, and farm dashboard zones.</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50 transition-colors duration-200">
+                          My Plants & Crops
+                        </h1>
+                        <p className="text-sm text-stone-500 dark:text-slate-400 mt-1 transition-colors duration-200">
+                          Catalog, monitor health, and inspect crops, vines, and farm dashboard zones.
+                        </p>
                       </div>
                       <button
                         onClick={() => {
                           setNewPlantFarmId(farms[0]?.id || '');
                           setShowAddPlantModal(true);
                         }}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm flex items-center space-x-2 self-start cursor-pointer"
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:from-emerald-800 active:to-teal-800 dark:from-emerald-500 dark:to-teal-500 dark:hover:from-emerald-400 dark:hover:to-teal-400 dark:active:from-emerald-700 dark:active:to-teal-700 active:scale-[0.98] text-white rounded-xl text-xs font-semibold tracking-wide shadow-md shadow-emerald-500/10 dark:shadow-emerald-500/10 flex items-center space-x-2 self-start cursor-pointer transition-all duration-200"
                       >
                         <Plus className="h-4.5 w-4.5" />
                         <span>Add New Crop</span>
@@ -1241,26 +1462,30 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Filters bar */}
-                    <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 pb-4">
-                      <div className="flex flex-1 items-center space-x-2 bg-stone-100 rounded-xl px-3 py-2 text-stone-500 max-w-md">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200/60 dark:border-slate-800/80 pb-4">
+                      <div className="flex flex-1 items-center space-x-2 bg-stone-100/80 dark:bg-slate-900/60 border border-transparent dark:border-slate-800/60 rounded-xl px-4 py-2 text-stone-500 dark:text-slate-400 max-w-md focus-within:bg-white dark:focus-within:bg-slate-950 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:focus-within:ring-emerald-500/10 focus-within:border-emerald-500/40 dark:focus-within:border-emerald-500/30 transition-all duration-200">
                         <Search className="h-4.5 w-4.5" />
                         <input
                           type="text"
                           value={plantSearch}
                           onChange={(e) => setPlantSearch(e.target.value)}
                           placeholder="Search cultivar types or names..."
-                          className="w-full bg-transparent text-xs text-stone-900 placeholder-stone-400 focus:outline-none"
+                          className="w-full bg-transparent text-xs text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 focus:outline-none"
                         />
                       </div>
 
                       <div className="flex items-center space-x-3 text-xs font-mono">
-                        <span className="text-stone-400 uppercase tracking-wider font-semibold">Status:</span>
-                        <div className="flex bg-stone-100 rounded-lg p-0.5">
+                        <span className="text-stone-400 dark:text-slate-500 uppercase tracking-wider font-semibold">Status:</span>
+                        <div className="flex bg-stone-100 dark:bg-slate-900/80 border border-stone-200/40 dark:border-slate-800/60 p-1 rounded-xl">
                           {['all', 'Healthy', 'Warning', 'Critical'].map((status) => (
                             <button
                               key={status}
                               onClick={() => setStatusFilter(status)}
-                              className={`px-3 py-1.5 rounded-md font-semibold cursor-pointer transition-all ${statusFilter === status ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-500 hover:text-stone-800'}`}
+                              className={`px-3 py-1.5 rounded-lg font-semibold text-xs cursor-pointer transition-all duration-200 ${
+                                statusFilter === status
+                                  ? 'bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-50 shadow-xs border border-stone-200/20 dark:border-slate-800/40'
+                                  : 'text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100 hover:bg-stone-200/50 dark:hover:bg-slate-800/50'
+                              }`}
                             >
                               {status === 'all' ? 'All' : status}
                             </button>
@@ -1270,51 +1495,77 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Plant Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                      {plants
-                        .filter((p) => {
-                          const matchesSearch = p.name.toLowerCase().includes(plantSearch.toLowerCase()) || p.type.toLowerCase().includes(plantSearch.toLowerCase());
-                          const matchesStatus = statusFilter === 'all' || p.healthStatus === statusFilter;
-                          return matchesSearch && matchesStatus;
-                        })
-                        .map((plant) => (
-                          <div
-                            key={plant.id}
-                            onClick={() => setSelectedPlantId(plant.id)}
-                            className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-                          >
-                            <div className="h-48 relative">
-                              <img
-                                src={plant.photoUrl}
-                                alt={plant.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 192'%3E%3Crect width='400' height='192' fill='%23f0fdf4'/%3E%3Ctext x='200' y='115' font-size='80' text-anchor='middle'%3E≡اî▒%3C/text%3E%3C/svg%3E"; }}
-                              />
-                              <div className="absolute top-4 right-4">
-                                <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full font-mono border ${plant.healthStatus === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : plant.healthStatus === 'Warning' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                  {plant.healthStatus}
-                                </span>
-                              </div>
-                            </div>
+                    <div
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"
+                    >
+                      <AnimatePresence>
+                        {plants
+                          .filter((p) => {
+                            const matchesSearch = p.name.toLowerCase().includes(plantSearch.toLowerCase()) || p.type.toLowerCase().includes(plantSearch.toLowerCase());
+                            const matchesStatus = statusFilter === 'all' || p.healthStatus === statusFilter;
+                            return matchesSearch && matchesStatus;
+                          })
+                          .map((plant) => {
+                            const isHealthy = plant.healthStatus === 'Healthy';
 
-                            <div className="p-5">
-                              <h3 className="text-base font-semibold text-stone-950">{plant.name}</h3>
-                              <p className="text-xs text-stone-400 mt-1 font-mono">{plant.type} ظت Planted {new Date(plant.plantingDate).toLocaleDateString()}</p>
-                              
-                              <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
-                                <span>Timeline logs</span>
-                                <span className="font-semibold text-stone-900 font-mono flex items-center space-x-1">
-                                  <span>View Profile</span>
-                                  <ChevronRight className="h-4 w-4" />
-                                </span>
+                            return (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                key={plant.id}
+                                onClick={() => openPlantProfile(plant.id)}
+                                className={`group bg-gradient-to-b from-white to-stone-50/50 dark:from-slate-900 dark:to-slate-950/90 border border-stone-200/60 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm cursor-pointer flex flex-col justify-between transition-colors duration-200 ${
+                                  isHealthy
+                                    ? 'hover:shadow-lg hover:-translate-y-1 hover:border-emerald-500/30 dark:hover:border-emerald-500/25 transition-all duration-300'
+                                    : 'hover:border-stone-300 dark:hover:border-slate-700'
+                                }`}
+                              >
+                              <div className="h-48 relative overflow-hidden">
+                                <img
+                                  src={plant.photoUrl}
+                                  alt={plant.name}
+                                  className={`w-full h-full object-cover ${isHealthy ? 'group-hover:scale-105 transition-transform duration-500' : ''}`}
+                                  onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 192'%3E%3Crect width='400' height='192' fill='%23f0fdf4'/%3E%3Ctext x='200' y='115' font-size='80' text-anchor='middle'%3E≡اî▒%3C/text%3E%3C/svg%3E"; }}
+                                />
+                                <div className="absolute top-4 right-4">
+                                  <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full font-mono border shadow-sm ${
+                                    plant.healthStatus === 'Healthy'
+                                      ? 'bg-emerald-50/90 dark:bg-emerald-950/85 text-emerald-700 dark:text-emerald-300 border-emerald-250/50 dark:border-emerald-800/40 shadow-emerald-500/5'
+                                      : plant.healthStatus === 'Warning'
+                                      ? 'bg-amber-50/90 dark:bg-amber-950/85 text-amber-700 dark:text-amber-300 border-amber-250/50 dark:border-amber-800/40 shadow-amber-500/5'
+                                      : 'bg-red-50/90 dark:bg-red-950/85 text-red-700 dark:text-red-300 border-red-250/50 dark:border-red-800/40 shadow-red-500/5'
+                                  }`}>
+                                    {plant.healthStatus}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+
+                              <div className="p-5">
+                                <h3 className="text-base font-bold text-stone-900 dark:text-slate-50 group-hover:text-emerald-600 dark:group-hover:text-emerald-450 transition-colors duration-200">
+                                  {plant.name}
+                                </h3>
+                                <p className="text-xs text-stone-400 dark:text-slate-500 mt-1.5 font-mono">
+                                  {plant.type} • Planted {new Date(plant.plantingDate).toLocaleDateString()}
+                                </p>
+                                
+                                <div className="mt-4 pt-4 border-t border-stone-100 dark:border-slate-800/60 flex items-center justify-between text-xs text-stone-500 dark:text-slate-400">
+                                  <span>Timeline logs</span>
+                                  <span className="font-semibold text-stone-900 dark:text-slate-200 font-mono flex items-center space-x-1">
+                                    <span>View Profile</span>
+                                    <ChevronRight className={`h-4 w-4 ${isHealthy ? 'group-hover:translate-x-0.5 transition-transform duration-200' : ''}`} />
+                                  </span>
+                                </div>
+                              </div>
+                              </motion.div>
+                            );
+                          })}
+                      </AnimatePresence>
                     </div>
                   </div>
                 ) : (
-                  <div>
+                  <div className="space-y-6">
                     {/* Plant Digital Profile Timeline Deep Dive */}
                     {(() => {
                       const plant = plants.find((p) => p.id === selectedPlantId);
@@ -1322,78 +1573,107 @@ export default function DashboardPage() {
                       return (
                         <div className="space-y-6">
                           <button
-                            onClick={() => setSelectedPlantId(null)}
-                            className="px-4 py-2 border border-stone-200 hover:bg-stone-50 bg-white rounded-xl text-xs font-semibold cursor-pointer text-stone-600 shadow-sm"
+                            onClick={() => {
+                              openPlantsList();
+                            }}
+                            className="px-4 py-2 border border-stone-250/70 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-stone-50 dark:hover:bg-emerald-500/10 hover:border-stone-300 dark:hover:border-emerald-500/40 text-stone-600 dark:text-slate-350 hover:text-stone-900 dark:hover:text-emerald-200 rounded-xl text-xs font-semibold cursor-pointer shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center space-x-1.5"
                           >
-                            ظ Back to list
+                            <span>← Back to list</span>
                           </button>
 
-                          <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm flex flex-col lg:flex-row gap-6 justify-between">
-                            <div className="flex flex-col md:flex-row gap-6">
+                          <div className="bg-gradient-to-r from-white to-stone-50/20 dark:from-slate-900 dark:to-slate-950/40 border border-stone-200/60 dark:border-slate-800/80 p-6 rounded-2xl shadow-sm flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+                            <div className="flex flex-col md:flex-row gap-6 w-full lg:w-auto">
                               <img
                                 src={plant.photoUrl}
                                 alt={plant.name}
-                                className="h-32 w-32 rounded-2xl object-cover border border-stone-200 self-start"
+                                className="h-32 w-32 rounded-2xl object-cover border border-stone-200 dark:border-slate-800 shadow-md self-start"
                                 onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' fill='%23f0fdf4' rx='12'/%3E%3Ctext x='64' y='82' font-size='56' text-anchor='middle'%3E≡اî▒%3C/text%3E%3C/svg%3E"; }}
                               />
-                              <div>
-                                <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full font-mono border ${plant.healthStatus === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : plant.healthStatus === 'Warning' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                              <div className="flex-1">
+                                <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full font-mono border shadow-sm ${
+                                  plant.healthStatus === 'Healthy'
+                                    ? 'bg-emerald-50/90 dark:bg-emerald-950/85 text-emerald-700 dark:text-emerald-300 border-emerald-250/50 dark:border-emerald-800/40'
+                                    : plant.healthStatus === 'Warning'
+                                    ? 'bg-amber-50/90 dark:bg-amber-950/85 text-amber-700 dark:text-amber-300 border-amber-250/50 dark:border-amber-800/40'
+                                    : 'bg-red-50/90 dark:bg-red-950/85 text-red-700 dark:text-red-300 border-red-250/50 dark:border-red-800/40'
+                                }`}>
                                   {plant.healthStatus}
                                 </span>
-                                <h1 className="text-2xl font-semibold tracking-tight text-stone-900 mt-2">{plant.name}</h1>
-                                <p className="text-sm text-stone-500 font-mono mt-1">Cultivar Type: {plant.type} ظت Registered {new Date(plant.plantingDate).toLocaleDateString()}</p>
-                                
-                                <div className="mt-4 flex space-x-3">
-                                  <button
-                                    onClick={() => {
-                                      setScanTargetPlantId(plant.id);
-                                      setCapturedImage(null);
-                                      setScanStep('select');
-                                      setActiveTab('scan');
-                                    }}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wide flex items-center space-x-2 cursor-pointer shadow-sm"
-                                  >
-                                    <Camera className="h-4 w-4" />
-                                    <span>Scan Plant Leaf</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeletePlant(plant.id)}
-                                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold cursor-pointer"
-                                  >
-                                    Archive Crop
-                                  </button>
-                                </div>
+                                <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50 mt-2">
+                                  {plant.name}
+                                </h1>
+                                <p className="text-xs text-stone-500 dark:text-slate-400 font-mono mt-1">
+                                  Cultivar Type: <span className="font-semibold text-stone-800 dark:text-slate-200">{plant.type}</span> • Registered {new Date(plant.plantingDate).toLocaleDateString()}
+                                </p>
+                                <p className="text-[10px] text-stone-400 dark:text-slate-500 font-mono mt-1">
+                                  ID: {plant.id}
+                                </p>
                               </div>
+                            </div>
+
+                            <div className="flex space-x-3 w-full sm:w-auto mt-4 lg:mt-0">
+                              <button
+                                onClick={() => {
+                                  setScanTargetPlantId(plant.id);
+                                  setScanCatalogMode(false);
+                                  setCapturedImage(null);
+                                  setAnalysisResult(null);
+                                  setScanError('');
+                                  setScanStep('select');
+                                  setSelectedPlantId(null);
+                                  setActiveTab('scan');
+                                  pushWorkspaceUrl('/Plant-Doctor');
+                                }}
+                                className="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 active:scale-[0.98] transition-all"
+                              >
+                                <Camera className="h-4 w-4" />
+                                <span>Scan Plant</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeletePlant(plant.id)}
+                                className="flex-1 sm:flex-none px-4 py-2.5 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:border-red-300 dark:hover:border-red-800 rounded-xl text-xs font-semibold cursor-pointer transition-all flex items-center justify-center space-x-1.5"
+                              >
+                                <Trash className="h-4 w-4" />
+                                <span>Delete Plant</span>
+                              </button>
                             </div>
                           </div>
 
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Notes logging & care reminders */}
                             <div className="lg:col-span-1 space-y-6">
-                              <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-400 font-mono pb-3 border-b">Add timeline entry</h3>
-                                <form onSubmit={handleAddNote} className="mt-4 space-y-3">
+                              {/* Timeline logger */}
+                              <div className="bg-gradient-to-b from-white to-stone-50/50 dark:from-slate-900 dark:to-slate-950/90 border border-stone-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm space-y-4">
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono pb-3 border-b border-stone-100 dark:border-slate-800/80">
+                                  Add timeline entry
+                                </h3>
+                                <form onSubmit={handleAddNote} className="space-y-3">
                                   <textarea
                                     value={newNoteContent}
                                     onChange={(e) => setNewNoteContent(e.target.value)}
                                     placeholder="e.g. Applied morning watering with nitrogen feed..."
                                     rows={3}
-                                    className="block w-full px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950 focus:ring-2 focus:ring-emerald-500/20"
+                                    className="block w-full px-3 py-2.5 text-xs border border-stone-200 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-950/60 rounded-xl focus:outline-none text-stone-950 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-500/10 focus:border-emerald-500 dark:focus:border-emerald-500/60 placeholder-stone-400 dark:placeholder-slate-500 transition-all duration-200"
                                   />
                                   {newNotePhoto ? (
                                     <div className="relative">
-                                      <img src={newNotePhoto} alt="Journal photo preview" className="w-full h-28 object-cover rounded-xl border border-stone-200" onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 112'%3E%3Crect width='400' height='112' fill='%23fafaf9'/%3E%3Ctext x='200' y='70' font-size='48' text-anchor='middle'%3E≡اô╖%3C/text%3E%3C/svg%3E"; }} />
+                                      <img
+                                        src={newNotePhoto}
+                                        alt="Journal photo preview"
+                                        className="w-full h-28 object-cover rounded-xl border border-stone-250 dark:border-slate-800 shadow-sm"
+                                        onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 112'%3E%3Crect width='400' height='112' fill='%23fafaf9'/%3E%3Ctext x='200' y='70' font-size='48' text-anchor='middle'%3E≡اô╖%3C/text%3E%3C/svg%3E"; }}
+                                      />
                                       <button
                                         type="button"
                                         onClick={() => setNewNotePhoto(null)}
-                                        className="absolute top-1.5 right-1.5 p-1 bg-white/90 rounded-lg text-stone-500 hover:text-red-600 cursor-pointer"
+                                        className="absolute top-1.5 right-1.5 p-1.5 bg-white/90 dark:bg-slate-800/90 rounded-lg text-stone-550 dark:text-slate-400 hover:text-red-650 dark:hover:text-red-400 shadow-xs cursor-pointer"
                                       >
                                         <X className="h-3.5 w-3.5" />
                                       </button>
                                     </div>
                                   ) : (
-                                    <label className="flex items-center justify-center space-x-2 py-2 border border-dashed border-stone-300 rounded-xl text-[11px] text-stone-400 cursor-pointer hover:bg-stone-50 hover:text-stone-600">
-                                      <Camera className="h-3.5 w-3.5" />
+                                    <label className="flex items-center justify-center space-x-2 py-3 border border-dashed border-stone-300 dark:border-slate-800 hover:border-emerald-500/40 dark:hover:border-emerald-500/30 rounded-xl text-xs text-stone-450 dark:text-slate-455 cursor-pointer hover:bg-stone-50 dark:hover:bg-slate-950/40 hover:text-stone-700 dark:hover:text-slate-200 transition-all duration-200">
+                                      <Camera className="h-3.5 w-3.5 text-stone-400 dark:text-slate-500" />
                                       <span>Attach a photo (optional)</span>
                                       <input type="file" accept="image/*" onChange={handleNotePhotoChange} className="hidden" />
                                     </label>
@@ -1401,7 +1681,7 @@ export default function DashboardPage() {
                                   <button
                                     type="submit"
                                     disabled={isSavingNote || !newNoteContent.trim()}
-                                    className="w-full py-2 bg-stone-900 text-white rounded-xl text-xs font-semibold cursor-pointer hover:bg-stone-800 disabled:opacity-55 flex items-center justify-center space-x-2"
+                                    className="w-full py-2.5 bg-stone-900 hover:bg-stone-800 text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all duration-200"
                                   >
                                     {isSavingNote ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : (
                                       <>
@@ -1414,27 +1694,29 @@ export default function DashboardPage() {
                               </div>
 
                               {/* Care Reminders */}
-                              <div className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-400 font-mono pb-3 border-b">Care reminders</h3>
-                                <form onSubmit={handleAddReminder} className="mt-4 space-y-2">
+                              <div className="bg-gradient-to-b from-white to-stone-50/50 dark:from-slate-900 dark:to-slate-950/90 border border-stone-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm space-y-4">
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono pb-3 border-b border-stone-100 dark:border-slate-800/80">
+                                  Care reminders
+                                </h3>
+                                <form onSubmit={handleAddReminder} className="space-y-2">
                                   <select
                                     value={newReminderType}
                                     onChange={(e: any) => setNewReminderType(e.target.value)}
-                                    className="block w-full px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                    className="block w-full px-3 py-2 text-xs border border-stone-200 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-950/60 rounded-xl focus:outline-none text-stone-950 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-500/10 focus:border-emerald-500"
                                   >
-                                    <option value="Watering">≡اْد Watering</option>
-                                    <option value="Fertilizing">≡اî▒ Fertilizing</option>
-                                    <option value="Pruning">ظ£éي╕ Pruning</option>
-                                    <option value="Repotting">≡از┤ Repotting</option>
-                                    <option value="Pest Check">≡ا¤ Pest Check</option>
-                                    <option value="Custom">≡اôî Custom</option>
+                                    <option value="Watering">💧 Watering</option>
+                                    <option value="Fertilizing">🌱 Fertilizing</option>
+                                    <option value="Pruning">✂️ Pruning</option>
+                                    <option value="Repotting">🪴 Repotting</option>
+                                    <option value="Pest Check">🔍 Pest Check</option>
+                                    <option value="Custom">✨ Custom</option>
                                   </select>
                                   <div className="flex space-x-2">
                                     <input
                                       type="date"
                                       value={newReminderDueDate}
                                       onChange={(e) => setNewReminderDueDate(e.target.value)}
-                                      className="flex-1 px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                      className="flex-1 px-3 py-2 text-xs border border-stone-200 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-950/60 rounded-xl focus:outline-none text-stone-950 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-500/10 focus:border-emerald-500"
                                     />
                                     <input
                                       type="number"
@@ -1442,32 +1724,43 @@ export default function DashboardPage() {
                                       value={newReminderRecurringDays}
                                       onChange={(e) => setNewReminderRecurringDays(e.target.value)}
                                       placeholder="Repeat (days)"
-                                      className="w-28 px-3 py-2 text-xs border border-stone-200 bg-stone-50 rounded-xl focus:outline-none text-stone-950"
+                                      className="w-28 px-3 py-2 text-xs border border-stone-200 dark:border-slate-800 bg-stone-50/80 dark:bg-slate-950/60 rounded-xl focus:outline-none text-stone-950 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-500/10"
                                     />
                                   </div>
                                   <button
                                     type="submit"
                                     disabled={isAddingReminder}
-                                    className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold cursor-pointer hover:bg-emerald-700 disabled:opacity-55 flex items-center justify-center space-x-2"
+                                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer hover:shadow active:scale-[0.98] disabled:opacity-50 flex items-center justify-center space-x-2 transition-all duration-200"
                                   >
                                     {isAddingReminder ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <span>Add Reminder</span>}
                                   </button>
                                 </form>
 
-                                <div className="mt-4 space-y-2">
+                                <div className="space-y-2 mt-4 max-h-[300px] overflow-y-auto pr-1">
                                   {plantReminders.length === 0 ? (
-                                    <p className="text-[11px] text-stone-400 text-center py-3">No reminders yet for this plant.</p>
+                                    <p className="text-[11px] text-stone-400 dark:text-slate-500 text-center py-4 font-medium">No reminders yet for this plant.</p>
                                   ) : (
                                     plantReminders.map((reminder) => (
-                                      <div key={reminder.id} className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${reminder.completed ? 'border-stone-100 bg-stone-50 text-stone-400' : 'border-emerald-100 bg-emerald-50/50 text-stone-700'}`}>
+                                      <div
+                                        key={reminder.id}
+                                        className={`flex items-center justify-between p-3 rounded-xl border text-xs transition-all duration-200 ${
+                                          reminder.completed
+                                            ? 'border-stone-100/80 dark:border-slate-800 bg-stone-50/60 dark:bg-slate-950/20 text-stone-400 dark:text-slate-500'
+                                            : 'border-emerald-100/80 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/10 text-stone-750 dark:text-slate-200 hover:border-emerald-200 dark:hover:border-emerald-900/60'
+                                        }`}
+                                      >
                                         <div>
-                                          <span className={`font-semibold ${reminder.completed ? 'line-through' : ''}`}>{reminder.reminderType}</span>
-                                          <span className="block text-[10px] text-stone-400 font-mono">Due {new Date(reminder.dueDate).toLocaleDateString()}</span>
+                                          <span className={`font-semibold ${reminder.completed ? 'line-through opacity-70' : ''}`}>
+                                            {reminder.reminderType}
+                                          </span>
+                                          <span className="block text-[10px] text-stone-400 dark:text-slate-500 font-mono mt-0.5">
+                                            Due {new Date(reminder.dueDate).toLocaleDateString()}
+                                          </span>
                                         </div>
                                         {!reminder.completed && (
                                           <button
                                             onClick={() => handleCompleteReminder(reminder.id)}
-                                            className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                            className="p-1.5 text-stone-450 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/50 rounded-lg cursor-pointer transition-colors"
                                             title="Mark done"
                                           >
                                             <Check className="h-3.5 w-3.5" />
@@ -1481,36 +1774,40 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Digital timeline timeline chronological display */}
-                            <div className="lg:col-span-2 bg-white border border-stone-200 p-6 rounded-2xl shadow-sm">
-                              <h2 className="text-base font-semibold text-stone-950 pb-4 border-b border-stone-100">Chronological Crop Health History</h2>
-                              <div className="mt-6 relative border-l border-stone-200 pl-6 ml-3 space-y-6">
+                            <div className="lg:col-span-2 bg-gradient-to-b from-white to-stone-50/50 dark:from-slate-900 dark:to-slate-950/90 border border-stone-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm">
+                              <h2 className="text-base font-bold text-stone-900 dark:text-slate-50 pb-4 border-b border-stone-100 dark:border-slate-800/80">
+                                Chronological Crop Health History
+                              </h2>
+                              <div className="mt-6 relative border-l-2 border-stone-200/70 dark:border-slate-800 pl-6 ml-3 space-y-6">
                                 {plantNotes.length === 0 ? (
-                                  <div className="text-stone-400 text-xs text-center py-6">No historical entries found. Create one above!</div>
+                                  <div className="text-stone-400 dark:text-slate-500 text-xs text-center py-10 font-medium">No historical entries found. Create one above!</div>
                                 ) : (
                                   plantNotes.map((note) => (
                                     <div key={note.id} className="relative">
                                       {/* Marker Dot */}
-                                      <div className="absolute -left-[31px] mt-1 bg-white border border-stone-300 p-1 rounded-full text-emerald-600 shadow-sm">
-                                        <div className="h-2 w-2 bg-emerald-600 rounded-full" />
+                                      <div className="absolute -left-[32px] mt-1 bg-white dark:bg-slate-950 border border-stone-300 dark:border-slate-800 p-1 rounded-full text-emerald-600 dark:text-emerald-400 shadow-sm transition-colors duration-200">
+                                        <div className="h-2.5 w-2.5 bg-emerald-600 dark:bg-emerald-400 rounded-full" />
                                       </div>
 
-                                      <div className="text-xs text-stone-400 font-mono flex items-center space-x-2">
+                                      <div className="text-xs text-stone-400 dark:text-slate-500 font-mono flex items-center space-x-2">
                                         <Clock className="h-3.5 w-3.5" />
-                                        <span>{new Date(note.createdAt).toLocaleDateString()} {new Date(note.createdAt).toLocaleTimeString()}</span>
+                                        <span>{new Date(note.createdAt).toLocaleDateString()} {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                       </div>
                                       {note.photoUrl && (
                                         <img
                                           src={note.photoUrl}
                                           alt="Journal entry photo"
-                                          className="mt-2 w-full max-w-xs h-32 object-cover rounded-xl border border-stone-200"
+                                          className="mt-2.5 w-full max-w-sm h-40 object-cover rounded-xl border border-stone-200 dark:border-slate-800 shadow-xs"
                                           onError={(e) => {
                                             const img = e.target as HTMLImageElement;
-                                            img.onerror = null; // prevent infinite loop
+                                            img.onerror = null;
                                             img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 128'%3E%3Crect width='300' height='128' fill='%23fafaf9' rx='10'/%3E%3Ctext x='150' y='80' font-size='56' text-anchor='middle'%3E≡اô╖%3C/text%3E%3C/svg%3E";
                                           }}
                                         />
                                       )}
-                                      <p className="text-xs text-stone-800 mt-2 leading-relaxed bg-stone-50 border p-3 rounded-xl">{note.content}</p>
+                                      <p className="text-xs text-stone-750 dark:text-slate-350 mt-2 leading-relaxed whitespace-pre-wrap bg-stone-50/50 dark:bg-slate-950/40 border border-stone-200/50 dark:border-slate-800/60 p-4 rounded-xl shadow-xs transition-colors duration-200">
+                                        {note.content}
+                                      </p>
                                     </div>
                                   ))
                                 )}
@@ -1533,74 +1830,94 @@ export default function DashboardPage() {
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Neural Diagnosis & Inspection Lab</h1>
-                  <p className="text-sm text-stone-500 mt-1">Multi-modal plant pathology scanner.</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50">Neural Diagnosis & Inspection Lab</h1>
+                    <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">Gemini-powered diagnosis for full plants, leaves, stems, fruit, flowers, roots, or field context.</p>
+                  </div>
+                  <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Gemini vision analysis</span>
+                  </div>
                 </div>
 
+                {scanError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
+                    {scanError}
+                  </div>
+                )}
+
                 {scanStep === 'select' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Live webcam option */}
-                    <div className="bg-white border border-stone-200 p-8 rounded-2xl text-center shadow-sm flex flex-col justify-between items-center space-y-6">
-                      <div className="p-4 bg-emerald-50 rounded-full text-emerald-600">
-                        <Camera className="h-8 w-8" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-stone-950 font-mono">Live Leaf Capture</h3>
-                        <p className="text-xs text-stone-500 mt-2 max-w-xs mx-auto">
-                          Inspect crop leaves immediately using your browser camera stream. Works perfectly on mobiles.
-                        </p>
-                      </div>
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                    <div className="rounded-2xl border border-stone-200/70 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                      <label className="block text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-slate-500 font-mono">Target plant</label>
+                      <select
+                        value={scanTargetPlantId}
+                        onChange={(e) => {
+                          setScanTargetPlantId(e.target.value);
+                          setScanCatalogMode(false);
+                          setScanError('');
+                        }}
+                        className="mt-2 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                      >
+                        <option value="">Choose registered plant</option>
+                        {plants.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
+                      </select>
 
-                      <div className="w-full">
-                        <label className="block text-xs font-semibold text-stone-400 uppercase tracking-widest mb-2 font-mono">Select Target Plant</label>
-                        <select
-                          value={scanTargetPlantId}
+                      <label className="mt-4 flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3 text-sm font-semibold text-stone-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={scanCatalogMode}
                           onChange={(e) => {
-                            setScanTargetPlantId(e.target.value);
-                            setScanCatalogMode(false);
+                            setScanCatalogMode(e.target.checked);
+                            if (e.target.checked) setScanTargetPlantId('');
                           }}
-                          className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs text-stone-900 mb-4"
-                        >
-                          <option value="">-- Choose registered plant --</option>
-                          {plants.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
-                        </select>
+                          className="h-4 w-4 accent-emerald-600"
+                        />
+                        <span>Catalog a new crop from the image</span>
+                      </label>
 
-                        <button
-                          onClick={startCamera}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-55 shadow-sm"
-                        >
-                          Activate Live Camera
-                        </button>
-                      </div>
+                      {selectedScanPlant && (
+                        <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                          <img src={selectedScanPlant.photoUrl} alt={selectedScanPlant.name} className="h-12 w-12 rounded-lg object-cover" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-stone-900 dark:text-slate-50">{selectedScanPlant.name}</p>
+                            <p className="truncate text-xs text-stone-500 dark:text-slate-400">{selectedScanPlant.type}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* File Upload fallback option */}
-                    <div className="bg-white border border-stone-200 p-8 rounded-2xl text-center shadow-sm flex flex-col justify-between items-center space-y-6">
-                      <div className="p-4 bg-blue-50 rounded-full text-blue-600">
-                        <Upload className="h-8 w-8" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-stone-950 font-mono">File Upload</h3>
-                        <p className="text-xs text-stone-500 mt-2 max-w-xs mx-auto">
-                          Upload high-resolution leaf photos from disk or photo library. Support PNG/JPEG.
-                        </p>
-                      </div>
-
-                      <div className="w-full">
-                        <label className="block text-xs font-semibold text-stone-400 uppercase tracking-widest mb-2 font-mono">Select Target Plant</label>
-                        <select
-                          value={scanTargetPlantId}
-                          onChange={(e) => {
-                            setScanTargetPlantId(e.target.value);
-                            setScanCatalogMode(false);
-                          }}
-                          className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs text-stone-900 mb-4"
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div className="rounded-2xl border border-stone-200/70 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            <Camera className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-stone-900 dark:text-slate-50">Camera Capture</h3>
+                            <p className="text-xs text-stone-500 dark:text-slate-400">Whole plant or any visible part.</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={startCamera}
+                          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:bg-emerald-800 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:active:bg-emerald-600"
                         >
-                          <option value="">-- Choose registered plant --</option>
-                          {plants.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
-                        </select>
+                          <Camera className="h-4 w-4" />
+                          <span>Open Camera</span>
+                        </button>
+                      </div>
 
+                      <div className="rounded-2xl border border-stone-200/70 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-sky-50 p-3 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">
+                            <Upload className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-stone-900 dark:text-slate-50">Photo Upload</h3>
+                            <p className="text-xs text-stone-500 dark:text-slate-400">PNG, JPEG, or phone photos.</p>
+                          </div>
+                        </div>
                         <input
                           type="file"
                           accept="image/*"
@@ -1608,12 +1925,12 @@ export default function DashboardPage() {
                           onChange={handleFileChange}
                           className="hidden"
                         />
-
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          className="w-full py-3 border border-stone-200 hover:bg-stone-50 bg-white text-stone-700 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-55 shadow-sm"
+                          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-3 text-xs font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
-                          Choose Local Photograph
+                          <Upload className="h-4 w-4" />
+                          <span>Choose Image</span>
                         </button>
                       </div>
                     </div>
@@ -1621,129 +1938,135 @@ export default function DashboardPage() {
                 )}
 
                 {scanStep === 'camera' && (
-                  <div className="max-w-xl mx-auto bg-black rounded-3xl overflow-hidden relative border border-stone-800 shadow-lg">
+                  <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-stone-800 bg-black shadow-lg">
                     <video
                       ref={videoRef}
                       autoPlay
                       playsInline
-                      className="w-full aspect-[4/3] object-cover scale-x-[-1]"
+                      className="aspect-[4/3] w-full object-cover"
                     />
                     <canvas ref={canvasRef} className="hidden" />
 
-                    <div className="absolute bottom-6 left-0 right-0 flex justify-center space-x-6 px-6">
+                    <div className="flex flex-col gap-3 border-t border-white/10 bg-stone-950/95 p-4 sm:flex-row sm:items-center sm:justify-center">
                       <button
                         onClick={() => {
                           stopCamera();
                           setScanStep('select');
                         }}
-                        className="px-4 py-2 bg-stone-900/80 hover:bg-stone-950 backdrop-blur-md text-white rounded-xl text-xs font-semibold cursor-pointer"
+                        className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/10"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={captureSnapshot}
-                        className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all border-4 border-white cursor-pointer shadow-lg"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-red-700"
                         title="Capture Photo"
                       >
-                        <Camera className="h-6 w-6" />
+                        <Camera className="h-4 w-4" />
+                        <span>Capture Image</span>
                       </button>
                     </div>
                   </div>
                 )}
 
                 {scanStep === 'analyzing' && (
-                  <div className="max-w-md mx-auto bg-white border border-stone-200 rounded-3xl p-8 text-center shadow-sm space-y-6">
-                    <Loader2 className="h-10 w-10 animate-spin text-emerald-600 mx-auto" />
+                  <div className="mx-auto max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-600 dark:text-emerald-400" />
                     <div>
-                      <h3 className="text-base font-semibold text-stone-950 font-mono">Neural Analysis In Progress</h3>
-                      <p className="text-xs text-stone-500 mt-2">
-                        Querying server-side model. Verifying chlorosis ratios, lesions margins, and spore densities...
+                      <h3 className="mt-5 text-base font-bold text-stone-900 dark:text-slate-50 font-mono">Gemini Analysis In Progress</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-stone-500 dark:text-slate-400">
+                        Inspecting visible plant organs, image quality, symptoms, pests, stress, and treatment options.
                       </p>
                     </div>
 
-                    <div className="p-4 bg-emerald-50 rounded-2xl text-left border border-emerald-100 font-sans text-xs text-emerald-800 space-y-2 leading-relaxed">
-                      <p className="font-semibold font-mono">≡اî▒ Pathologist Tip:</p>
-                      <p>Always photograph the leaf from a top-down angle in direct natural sunlight to maximize spore detection rates.</p>
+                    <div className="mt-5 space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-left text-xs leading-relaxed text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                      <p className="font-semibold font-mono">Image quality note:</p>
+                      <p>Use clear lighting and include the affected plant area whenever possible.</p>
                     </div>
                   </div>
                 )}
 
                 {scanStep === 'result' && capturedImage && !analysisResult && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Captured leaf photograph */}
-                    <div className="lg:col-span-1 bg-white border border-stone-200 p-6 rounded-2xl shadow-sm space-y-4 text-center">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-stone-400 font-mono block">Captured foliage photo</span>
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+                    <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+                      <span className="block text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono">Captured plant image</span>
                       <img
                         src={capturedImage}
-                        alt="Captured Foliage"
-                        className="w-full rounded-xl border border-stone-200 aspect-[4/3] object-cover"
+                        alt="Captured plant"
+                        className="mt-4 aspect-[4/3] w-full rounded-xl border border-stone-200 object-cover dark:border-slate-800"
                       />
-                      <div className="flex space-x-3">
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                         <button
                           onClick={() => {
                             setCapturedImage(null);
+                            setScanError('');
                             setScanStep('select');
                           }}
-                          className="flex-1 py-2 border rounded-xl text-xs font-semibold cursor-pointer hover:bg-stone-50"
+                          className="flex-1 rounded-xl border border-stone-200 py-2 text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           Retake
                         </button>
                         <button
                           onClick={runAIAnalysis}
-                          disabled={(scanCatalogMode || (!scanTargetPlantId && plants.length === 0)) && (!scanNewPlantName.trim() || !scanNewPlantType.trim())}
-                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wide cursor-pointer flex items-center justify-center space-x-2 shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                          disabled={!canRunScan || isAnalyzing}
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55 dark:bg-emerald-500 dark:hover:bg-emerald-400"
                         >
-                          <Sprout className="h-4 w-4" />
+                          {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                           <span>Run Neural Diagnosis</span>
                         </button>
                       </div>
-                      <div className="pt-4 border-t border-stone-100 text-left space-y-3">
-                        <label className="flex items-center gap-2 text-xs font-semibold text-stone-700 cursor-pointer">
+                      <div className="mt-4 space-y-3 border-t border-stone-100 pt-4 text-left dark:border-slate-800">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-slate-300">
                           <input
                             type="checkbox"
-                            checked={scanCatalogMode || (!scanTargetPlantId && plants.length === 0)}
+                            checked={scanNeedsCatalog}
                             onChange={(e) => setScanCatalogMode(e.target.checked)}
                             className="h-4 w-4 accent-emerald-600"
                           />
                           Catalog New Crop from this photo
                         </label>
-                        {(scanCatalogMode || (!scanTargetPlantId && plants.length === 0)) && (
+                        {scanNeedsCatalog && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <input
                               type="text"
                               value={scanNewPlantName}
                               onChange={(e) => setScanNewPlantName(e.target.value)}
                               placeholder="Plant name"
-                              className="px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                             />
                             <input
                               type="text"
                               value={scanNewPlantType}
                               onChange={(e) => setScanNewPlantType(e.target.value)}
                               placeholder="Crop type"
-                              className="px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                             />
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white border border-stone-200 p-8 rounded-2xl shadow-sm text-center py-16 text-stone-400">
-                      Select &quot;Run Neural Diagnosis&quot; to query Gemini AI model and get organic/chemical treatment steps.
+                    <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+                      <div className="flex h-full min-h-56 flex-col justify-center rounded-xl border border-dashed border-stone-200 bg-stone-50/70 p-6 text-center dark:border-slate-800 dark:bg-slate-950/40">
+                        <Sparkles className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                        <h3 className="mt-4 text-base font-bold text-stone-900 dark:text-slate-50">Ready for Gemini diagnosis</h3>
+                        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-500 dark:text-slate-400">
+                          The image will be analyzed against the selected crop profile and saved with generated treatment steps.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* Analysis Result Displays */}
                 {scanStep === 'result' && analysisResult && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                    {/* Left details */}
-                    <div className="lg:col-span-1 bg-white border border-stone-200 p-6 rounded-2xl shadow-sm text-center space-y-4">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-stone-400 font-mono block">Analyzed Foliage photo</span>
+                  <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+                    <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+                      <span className="block text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono">Analyzed plant image</span>
                       <img
                         src={analysisResult.scan.imageUrl}
-                        alt="Analyzed Foliage"
-                        className="w-full rounded-xl border border-stone-200 aspect-[4/3] object-cover"
+                        alt="Analyzed plant"
+                        className="mt-4 aspect-[4/3] w-full rounded-xl border border-stone-200 object-cover dark:border-slate-800"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
                           img.onerror = null;
@@ -1756,47 +2079,68 @@ export default function DashboardPage() {
                           }
                         }}
                       />
+                      {selectedScanPlant && (
+                        <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-3 text-left dark:border-slate-800 dark:bg-slate-950/60">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono">Saved to plant record</span>
+                          <p className="mt-1 text-sm font-bold text-stone-900 dark:text-slate-50">{selectedScanPlant.name}</p>
+                          <p className="text-xs text-stone-500 dark:text-slate-400">{selectedScanPlant.type}</p>
+                        </div>
+                      )}
                       <button
                         onClick={() => {
                           setCapturedImage(null);
                           setAnalysisResult(null);
+                          setScanError('');
                           setScanStep('select');
                         }}
-                        className="w-full py-2 border rounded-xl text-xs font-semibold hover:bg-stone-50 cursor-pointer"
+                        className="mt-4 w-full rounded-xl border border-stone-200 py-2 text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                       >
                         Reset and Scan New
                       </button>
                     </div>
 
-                    {/* Pathological diagnosis results card */}
-                    <div className="lg:col-span-2 bg-white border border-stone-200 p-6 rounded-2xl shadow-sm space-y-6">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+                    <div className="space-y-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+                      <div className="flex flex-col gap-4 border-b border-stone-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <div className="flex items-center space-x-2">
-                            <span className="text-xs text-stone-400 font-semibold font-mono">NEURAL DIAGNOSIS OUTCOME</span>
+                            <span className="text-xs text-stone-400 dark:text-slate-500 font-semibold font-mono">GEMINI DIAGNOSIS OUTCOME</span>
                           </div>
-                          <h2 className="text-2xl font-bold tracking-tight text-stone-900 mt-1">{analysisResult.scan.diagnosis}</h2>
+                          <h2 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50">{analysisResult.scan.diagnosis}</h2>
                         </div>
 
-                        <div className="flex space-x-3 items-center">
-                          <div className="bg-emerald-50 text-emerald-800 border p-3 rounded-xl font-mono text-center">
-                            <span className="block text-[10px] text-emerald-600">CONFIDENCE</span>
+                        <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center font-mono text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                            <span className="block text-[10px] text-emerald-600 dark:text-emerald-300">CONFIDENCE</span>
                             <span className="font-bold text-lg">{analysisResult.scan.confidence}%</span>
                           </div>
-                          <div className="bg-amber-50 text-amber-800 border p-3 rounded-xl font-mono text-center">
-                            <span className="block text-[10px] text-amber-600">SEVERITY</span>
+                          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-center font-mono text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+                            <span className="block text-[10px] text-amber-600 dark:text-amber-300">SEVERITY</span>
                             <span className="font-bold text-lg uppercase">{analysisResult.scan.severity}</span>
                           </div>
                         </div>
                       </div>
 
                       <div>
-                        <h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400 font-mono">Symptoms Analysis</h4>
-                        <p className="text-xs text-stone-700 leading-relaxed mt-2 bg-stone-50 p-3 rounded-xl border">{analysisResult.scan.symptoms}</p>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono">Symptoms Analysis</h4>
+                        <p className="mt-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">{analysisResult.scan.symptoms}</p>
                       </div>
 
+                      {hasSpecimenMismatch && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-100">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                            <div>
+                              <h4 className="text-sm font-bold">Possible specimen mismatch</h4>
+                              <p className="mt-1 text-xs leading-relaxed">
+                                Gemini indicates the uploaded image may not match the selected plant. The scan is still saved under the selected plant record so you can review it in that plant timeline.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Expert Pathologist consultation request queue block */}
-                      <div className="p-4 bg-stone-900 text-stone-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border shadow-sm">
+                      <div className="flex flex-col gap-4 rounded-xl border border-stone-800 bg-stone-900 p-4 text-stone-100 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <h4 className="text-xs font-semibold text-white tracking-wide font-mono flex items-center space-x-1.5">
                             <Award className="h-4 w-4 text-emerald-400" />
@@ -1817,45 +2161,51 @@ export default function DashboardPage() {
                       </div>
 
                       {expertReviewResponse && (
-                        <div className="p-4 bg-emerald-50/50 border border-emerald-200/50 rounded-xl space-y-2">
-                          <span className="text-xs font-semibold font-mono text-emerald-800 block">Pathologist Review Response Received:</span>
-                          <p className="text-xs text-stone-700 leading-relaxed whitespace-pre-wrap">{expertReviewResponse.expertReply}</p>
+                        <div className="space-y-2 rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                          <span className="block text-xs font-semibold font-mono text-emerald-800 dark:text-emerald-200">Pathologist Review Response Received:</span>
+                          <p className="whitespace-pre-wrap text-xs leading-relaxed text-stone-700 dark:text-slate-300">{expertReviewResponse.expertReply}</p>
                         </div>
                       )}
 
                       {/* Diagnostic treatment recommendation plans tabs */}
-                      <div className="border-t pt-6">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 font-mono">Generated Treatment Protocol</h3>
+                      <div className="border-t border-stone-100 pt-6 dark:border-slate-800">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-slate-500 font-mono">Generated Treatment Protocol</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                           {/* Organic treatments column */}
-                          <div className="bg-emerald-50/25 border border-emerald-100 p-5 rounded-xl space-y-3">
-                            <h4 className="text-xs font-semibold font-mono text-emerald-950 uppercase tracking-wider flex items-center space-x-1.5">
+                          <div className="space-y-3 rounded-xl border border-emerald-100 bg-emerald-50/25 p-5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                            <h4 className="flex items-center space-x-1.5 text-xs font-semibold font-mono text-emerald-950 uppercase tracking-wider dark:text-emerald-200">
                               <span className="h-2 w-2 rounded-full bg-emerald-500" />
                               <span>Organic Treatments</span>
                             </h4>
                             <ul className="space-y-2">
-                              {analysisResult.treatment.organicSteps.map((step: string, i: number) => (
-                                <li key={i} className="text-xs text-stone-700 leading-normal flex items-start space-x-2">
-                                  <span className="font-bold text-emerald-700 font-mono shrink-0">{i+1}.</span>
+                              {(analysisResult.treatment?.organicSteps || []).map((step: string, i: number) => (
+                                <li key={i} className="flex items-start space-x-2 text-xs leading-normal text-stone-700 dark:text-slate-300">
+                                  <span className="shrink-0 font-bold text-emerald-700 dark:text-emerald-300 font-mono">{i+1}.</span>
                                   <span>{step}</span>
                                 </li>
                               ))}
+                              {(!analysisResult.treatment?.organicSteps || analysisResult.treatment.organicSteps.length === 0) && (
+                                <li className="text-xs leading-normal text-stone-500 dark:text-slate-400">No organic steps were returned for this scan.</li>
+                              )}
                             </ul>
                           </div>
 
                           {/* Chemical treatments column */}
-                          <div className="bg-stone-50 border border-stone-200 p-5 rounded-xl space-y-3">
-                            <h4 className="text-xs font-semibold font-mono text-stone-950 uppercase tracking-wider flex items-center space-x-1.5">
+                          <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+                            <h4 className="flex items-center space-x-1.5 text-xs font-semibold font-mono text-stone-950 uppercase tracking-wider dark:text-slate-100">
                               <span className="h-2 w-2 rounded-full bg-stone-500" />
                               <span>Chemical Controls</span>
                             </h4>
                             <ul className="space-y-2">
-                              {analysisResult.treatment.chemicalSteps.map((step: string, i: number) => (
-                                <li key={i} className="text-xs text-stone-700 leading-normal flex items-start space-x-2">
-                                  <span className="font-bold text-stone-700 font-mono shrink-0">{i+1}.</span>
+                              {(analysisResult.treatment?.chemicalSteps || []).map((step: string, i: number) => (
+                                <li key={i} className="flex items-start space-x-2 text-xs leading-normal text-stone-700 dark:text-slate-300">
+                                  <span className="shrink-0 font-bold text-stone-700 dark:text-slate-300 font-mono">{i+1}.</span>
                                   <span>{step}</span>
                                 </li>
                               ))}
+                              {(!analysisResult.treatment?.chemicalSteps || analysisResult.treatment.chemicalSteps.length === 0) && (
+                                <li className="text-xs leading-normal text-stone-500 dark:text-slate-400">No chemical controls were returned for this scan.</li>
+                              )}
                             </ul>
                           </div>
                         </div>
@@ -1868,225 +2218,59 @@ export default function DashboardPage() {
 
             {/* 4. TREATMENTS TAB */}
             {activeTab === 'treatments' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Treatment Plan Monitoring Logs</h1>
-                  <p className="text-sm text-stone-500 mt-1">Eradication schedules for diagnosed crop disease outbreaks.</p>
-                </div>
-
-                <div className="space-y-6">
-                  {(() => {
-                    const activeTreatments = plants.filter((p) => p.healthStatus !== 'Healthy');
-                    if (activeTreatments.length === 0) {
-                      return (
-                        <div className="bg-white border p-12 text-center rounded-2xl text-stone-400">
-                          ≡اë All crops cataloged are perfectly healthy! Spore suppressions complete.
-                        </div>
-                      );
-                    }
-
-                    return activeTreatments.map((plant) => (
-                      <div key={plant.id} className="bg-white border border-stone-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row gap-6 justify-between items-start">
-                        <div className="flex items-start space-x-4">
-                          <img
-                            src={plant.photoUrl}
-                            alt={plant.name}
-                            className="h-16 w-16 rounded-xl object-cover border border-stone-200"
-                            onError={(e) => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f0fdf4' rx='10'/%3E%3Ctext x='32' y='44' font-size='32' text-anchor='middle'%3E≡اî▒%3C/text%3E%3C/svg%3E"; }}
-                          />
-                          <div>
-                            <span className="px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-bold font-mono border border-red-200 rounded uppercase">
-                              Active Threat
-                            </span>
-                            <h3 className="text-base font-semibold text-stone-950 mt-1.5">{plant.name}</h3>
-                            <p className="text-xs text-stone-500 font-mono mt-0.5">Cultivar Type: {plant.type}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                          <button
-                            onClick={() => {
-                              setSelectedPlantId(plant.id);
-                              setActiveTab('plants');
-                            }}
-                            className="px-4 py-2.5 border border-stone-200 hover:bg-stone-50 text-stone-700 rounded-xl text-xs font-semibold cursor-pointer shadow-sm text-center whitespace-nowrap"
-                          >
-                            View Health Timeline
-                          </button>
-                          
-                          <button
-                            onClick={async () => {
-                              // Find treatment linked to this plant
-                              const treatmentsRes = await fetch(`/api/treatments?plantId=${plant.id}`);
-                              const treatmentsData = await treatmentsRes.json();
-                              const targetTreatment = treatmentsData.treatments?.find((t: any) => t.status !== 'Completed');
-                              if (targetTreatment) {
-                                await resolveTreatment(targetTreatment.id);
-                              } else {
-                                // Default fallback if no specific treatment model exists in database
-                                alert('Treatment marked as completed. Restoring plant health index to pristine.');
-                                await fetch('/api/plants', {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ id: plant.id, healthStatus: 'Healthy' }),
-                                });
-                                await refreshAll();
-                              }
-                            }}
-                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-sm text-center whitespace-nowrap"
-                          >
-                            Mark as Fully Treated
-                          </button>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </motion.div>
+              <CarePlansSection
+                plants={plants}
+                carePlanDetail={carePlanDetail}
+                carePlanLoadingId={carePlanLoadingId}
+                toastMessage={toastMessage}
+                onOpenCarePlan={openCarePlanDetail}
+                onCloseCarePlan={() => setCarePlanDetail(null)}
+                onMarkFullyTreated={markPlantFullyTreated}
+                onOpenTimeline={(plantId) => {
+                  setCarePlanDetail(null);
+                  openPlantProfile(plantId);
+                }}
+              />
             )}
-
             {/* 5. COMMUNITY FORUM TAB */}
             {activeTab === 'community' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Crop Pathologist Forum & Community</h1>
-                    <p className="text-sm text-stone-500 mt-1">Exchange tips, oomycete notes, and agricultural strategies.</p>
-                  </div>
-                  <button
-                    onClick={() => setShowAddPostModal(true)}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm flex items-center space-x-2 self-start cursor-pointer"
-                  >
-                    <Plus className="h-4.5 w-4.5" />
-                    <span>Create Discussion Thread</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Threads lists */}
-                  <div className="lg:col-span-2 space-y-4">
-                    {/* Category Tabs */}
-                    <div className="flex space-x-2 border-b border-stone-200 pb-3 overflow-x-auto">
-                      {['all', 'Diseases', 'Tips', 'General', 'Farming Tech'].map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => setCommunityCategory(cat as any)}
-                          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all ${communityCategory === cat ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white border text-stone-500 hover:bg-stone-50'}`}
-                        >
-                          {cat === 'all' ? 'All Threads' : cat}
-                        </button>
-                      ))}
-                    </div>
-
-                    {postsLoading ? (
-                      <div className="py-12 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                    ) : posts.length === 0 ? (
-                      <div className="bg-white border p-12 text-center rounded-2xl text-stone-400">No active discussion threads in this category. Be the first to post!</div>
-                    ) : (
-                      posts.map((post) => (
-                        <div key={post.id} className="bg-white border border-stone-200 p-5 rounded-2xl shadow-sm space-y-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <span className="px-2 py-0.5 bg-stone-100 text-stone-500 text-[10px] font-bold font-mono rounded border uppercase">
-                                {post.category}
-                              </span>
-                              <h3 className="text-base font-semibold text-stone-950 mt-2">{post.title}</h3>
-                              <p className="text-xs text-stone-500 font-mono mt-1">Thread started by {post.authorName} ظت {new Date(post.createdAt).toLocaleDateString()}</p>
-                            </div>
-                          </div>
-
-                          <p className="text-xs text-stone-700 leading-relaxed bg-stone-50/50 p-3 rounded-xl border">{post.content}</p>
-
-                          <div className="flex items-center space-x-6 text-xs text-stone-500 font-sans border-t pt-3">
-                            <button
-                              onClick={() => handleLikePost(post.id)}
-                              className={`flex items-center space-x-2 cursor-pointer ${post.likes.includes(user.id) ? 'text-emerald-700 font-semibold' : 'hover:text-stone-800'}`}
-                            >
-                              <Heart className="h-4 w-4" />
-                              <span>{post.likes.length} Likes</span>
-                            </button>
-                            <button
-                              onClick={() => fetchComments(post.id)}
-                              className="flex items-center space-x-2 hover:text-stone-800 cursor-pointer"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                              <span>Comment Replies</span>
-                            </button>
-                          </div>
-
-                          {/* Nested Comment Drawer for Selected Post */}
-                          {activePostIdForComments === post.id && (
-                            <div className="mt-4 pt-4 border-t border-stone-100 space-y-4">
-                              <div className="space-y-3 pl-4 border-l-2 border-stone-200">
-                                {activePostComments.length === 0 ? (
-                                  <p className="text-xs text-stone-400">No replies yet. Be the first to share your pathogenetic expertise!</p>
-                                ) : (
-                                  activePostComments.map((cmt) => (
-                                    <div key={cmt.id} className="text-xs bg-stone-50/80 p-2.5 rounded-xl border">
-                                      <p className="font-mono font-semibold text-emerald-800">{cmt.authorName}:</p>
-                                      <p className="text-stone-700 mt-1 leading-normal">{cmt.content}</p>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-
-                              <form onSubmit={handleAddComment} className="flex space-x-2">
-                                <input
-                                  type="text"
-                                  required
-                                  value={newCommentText}
-                                  onChange={(e) => setNewCommentText(e.target.value)}
-                                  placeholder="Type pathological response..."
-                                  className="flex-1 px-3 py-2 border rounded-xl text-xs bg-stone-50 text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                />
-                                <button
-                                  type="submit"
-                                  className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
-                                >
-                                  Reply
-                                </button>
-                              </form>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Reference sidebar */}
-                  <div className="lg:col-span-1 bg-white border border-stone-200 p-6 rounded-2xl shadow-sm space-y-6 self-start">
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-400 font-mono pb-3 border-b">Diagnosable Diseases (Reference)</h3>
-                    <div className="space-y-3 divide-y divide-stone-150">
-                      {[
-                        { name: 'Tomato Late Blight', oomycete: 'P. infestans' },
-                        { name: 'Powdery Mildew', oomycete: 'Erysiphales' },
-                        { name: 'Black Spot Roses', oomycete: 'D. rosae' },
-                        { name: 'Root Rot Pythium', oomycete: 'P. ultimum' },
-                        { name: 'Fire Blight Pear', oomycete: 'E. amylovora' }
-                      ].map((dis, i) => (
-                        <div key={i} className={`pt-3 ${i === 0 ? 'pt-0' : ''}`}>
-                          <h4 className="text-xs font-semibold text-stone-900">{dis.name}</h4>
-                          <span className="text-[10px] italic font-mono text-stone-400">{dis.oomycete} pathogen reference</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
+              <CommunitySection
+                posts={posts}
+                postsLoading={postsLoading}
+                userId={user.id}
+                communityCategory={communityCategory}
+                activePostComments={activePostComments}
+                activePostIdForComments={activePostIdForComments}
+                newCommentText={newCommentText}
+                onCategoryChange={setCommunityCategory}
+                onShowAddPost={() => setShowAddPostModal(true)}
+                onLikePost={handleLikePost}
+                onFetchComments={fetchComments}
+                onCommentTextChange={setNewCommentText}
+                onAddComment={handleAddComment}
+              />
             )}
-
             {/* 6. SETTINGS TAB */}
             {activeTab === 'settings' && (
+              <SettingsSection
+                user={user}
+                settingsName={settingsName}
+                settingsLocation={settingsLocation}
+                settingsUnits={settingsUnits}
+                settingsPlan={settingsPlan}
+                settingsAccountType={settingsAccountType}
+                settingsError={settingsError}
+                settingsSuccess={settingsSuccess}
+                settingsSaving={settingsSaving}
+                onNameChange={setSettingsName}
+                onLocationChange={setSettingsLocation}
+                onUnitsChange={setSettingsUnits}
+                onPlanChange={setSettingsPlan}
+                onAccountTypeChange={setSettingsAccountType}
+                onSubmit={handleSaveSettings}
+              />
+            )}
+            {false && activeTab === 'settings' && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2199,83 +2383,83 @@ export default function DashboardPage() {
 
       {/* --- ADD PLANT / CROP MODAL OVERLAY --- */}
       {showAddPlantModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-stone-950/50 backdrop-blur-sm flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-white border border-stone-200 rounded-3xl p-6 shadow-xl relative"
+            className="w-full max-w-md bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl relative"
           >
             <button
               onClick={() => {
                 setShowAddPlantModal(false);
                 setNewPlantPhoto(null);
               }}
-              className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-lg cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 text-stone-400 dark:text-slate-500 hover:text-stone-700 dark:hover:text-slate-200 hover:bg-stone-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h2 className="text-lg font-semibold tracking-tight text-stone-950 font-mono flex items-center space-x-2">
+            <h2 className="text-lg font-semibold tracking-tight text-stone-950 dark:text-slate-50 font-mono flex items-center space-x-2">
               <Sprout className="h-5 w-5 text-emerald-600" />
               <span>Catalog New Crop</span>
             </h2>
 
             <form onSubmit={handleAddPlant} className="mt-4 space-y-4 text-xs font-sans">
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Crop/Plant Title</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Crop/Plant Title</label>
                 <input
                   type="text"
                   required
                   value={newPlantName}
                   onChange={(e) => setNewPlantName(e.target.value)}
                   placeholder="e.g. heirloom cherry tomato vine #4"
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-500/60"
                 />
               </div>
 
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Cultivar Type / Class</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Cultivar Type / Class</label>
                 <input
                   type="text"
                   required
                   value={newPlantType}
                   onChange={(e) => setNewPlantType(e.target.value)}
                   placeholder="e.g. Tomato, Rose, Wheat, Citrus"
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-500/60"
                 />
               </div>
 
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Planting Date</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Planting Date</label>
                 <input
                   type="date"
                   required
                   value={newPlantDate}
                   onChange={(e) => setNewPlantDate(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-500/60"
                 />
               </div>
 
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Plant Photo</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Plant Photo</label>
                 {newPlantPhoto ? (
                   <div className="relative mt-1">
                     <img
                       src={newPlantPhoto}
                       alt="New plant preview"
-                      className="h-36 w-full rounded-xl border border-stone-200 object-cover"
+                      className="h-36 w-full rounded-xl border border-stone-200 dark:border-slate-800 object-cover"
                     />
                     <button
                       type="button"
                       onClick={() => setNewPlantPhoto(null)}
-                      className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-lg text-stone-500 hover:text-red-600 cursor-pointer"
+                      className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-slate-800/90 rounded-lg text-stone-500 dark:text-slate-400 hover:text-red-650 dark:hover:text-red-300 cursor-pointer"
                       title="Remove photo"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 ) : (
-                  <label className="mt-1 flex items-center justify-center space-x-2 py-3 border border-dashed border-stone-300 rounded-xl text-xs text-stone-500 cursor-pointer hover:bg-stone-50 hover:text-stone-700">
+                  <label className="mt-1 flex items-center justify-center space-x-2 py-3 border border-dashed border-stone-300 dark:border-slate-800 rounded-xl text-xs text-stone-500 dark:text-slate-400 cursor-pointer hover:bg-stone-50 dark:hover:bg-slate-900 hover:text-stone-700 dark:hover:text-slate-200">
                     <Camera className="h-4 w-4" />
                     <span>Upload plant photo</span>
                     <input type="file" accept="image/*" onChange={handleNewPlantPhotoChange} className="hidden" />
@@ -2285,7 +2469,7 @@ export default function DashboardPage() {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold tracking-wider cursor-pointer shadow-sm"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:active:bg-emerald-700 text-white rounded-xl font-semibold tracking-wider cursor-pointer shadow-sm transition-colors duration-200"
               >
                 Register Crop
               </button>
@@ -2300,39 +2484,44 @@ export default function DashboardPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-lg bg-white border border-stone-200 rounded-3xl p-6 shadow-xl relative"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative"
           >
             <button
               onClick={() => setShowAddPostModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-lg cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 text-stone-400 dark:text-slate-500 hover:text-stone-700 dark:hover:text-slate-200 hover:bg-stone-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <h2 className="text-lg font-semibold tracking-tight text-stone-950 font-mono flex items-center space-x-2">
-              <MessageSquare className="h-5 w-5 text-emerald-600" />
-              <span>Create discussion thread</span>
-            </h2>
+            <div className="flex items-start gap-3 border-b border-stone-100 pb-4 dark:border-slate-800">
+              <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <MessageSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-stone-950 dark:text-slate-50">Create discussion thread</h2>
+                <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">Share a field observation, diagnosis question, or treatment note.</p>
+              </div>
+            </div>
 
             <form onSubmit={handleCreatePost} className="mt-4 space-y-4 text-xs font-sans">
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Thread Title</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Thread Title</label>
                 <input
                   type="text"
                   required
                   value={newPostTitle}
                   onChange={(e) => setNewPostTitle(e.target.value)}
                   placeholder="e.g. Signs of citrus thrips on grapefruits?"
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Forum Category</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Forum Category</label>
                 <select
                   value={newPostCategory}
                   onChange={(e: any) => setNewPostCategory(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
                 >
                   <option value="General">General Gardening / Farming</option>
                   <option value="Diseases">Plant Diseases & Pathogens</option>
@@ -2342,20 +2531,20 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <label className="block text-stone-600 uppercase font-semibold font-mono tracking-wider">Thread Content</label>
+                <label className="block text-stone-600 dark:text-slate-400 uppercase font-semibold font-mono tracking-wider">Thread Content</label>
                 <textarea
                   required
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
                   placeholder="Describe your question, observation, or recommendations..."
                   rows={4}
-                  className="mt-1 block w-full px-3 py-2 border rounded-xl bg-stone-50 text-stone-900 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1 block w-full px-3 py-2 border border-stone-200 dark:border-slate-800 rounded-xl bg-stone-50 dark:bg-slate-950 text-stone-900 dark:text-slate-100 placeholder-stone-400 dark:placeholder-slate-500 focus:outline-none text-xs focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold tracking-wider cursor-pointer shadow-sm"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white rounded-xl font-semibold tracking-wider cursor-pointer shadow-sm transition-colors"
               >
                 Launch Thread
               </button>
@@ -2421,3 +2610,19 @@ export default function DashboardPage() {
     </>
   );
 }
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-stone-50 text-stone-800 dark:bg-slate-950 dark:text-slate-100">
+        <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+        <p className="mt-4 text-sm font-medium tracking-tight font-sans">Bootstrapping AgriScan AI core modules...</p>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+
+
