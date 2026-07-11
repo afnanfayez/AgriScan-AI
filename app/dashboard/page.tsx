@@ -8,6 +8,12 @@ import { ROLE_CONFIG } from '@/components/dashboard/role-config';
 import CarePlansSection from '@/components/dashboard/care-plans-section';
 import CommunitySection from '@/components/dashboard/community-section';
 import SettingsSection from '@/components/dashboard/settings-section';
+import FarmerOverviewSection from '@/components/dashboard/farmer-overview-section';
+import FarmerFieldMapSection from '@/components/dashboard/farmer-field-map-section';
+import FarmerBatchScanSection from '@/components/dashboard/farmer-batch-scan-section';
+import FarmerAnalyticsSection from '@/components/dashboard/farmer-analytics-section';
+import FarmerIrrigationSection from '@/components/dashboard/farmer-irrigation-section';
+import FarmerLaborSection from '@/components/dashboard/farmer-labor-section';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sprout,
@@ -47,6 +53,21 @@ const TAB_ROUTES: Record<string, string> = {
   treatments: '/Care-Plans',
   community: '/Community',
   settings: '/Settings',
+  // Commercial Farmer
+  fieldmap: '/Field-Map',
+  analytics: '/Yield-Analytics',
+  irrigation: '/Irrigation',
+  labor: '/Labor',
+  // Nursery Operator
+  batches: '/Batches',
+  grading: '/Quality-Grading',
+  orders: '/Orders',
+  reports: '/Loss-Reports',
+  // Agribusiness
+  multifarm: '/Multi-Farm',
+  team: '/Team',
+  apikeys: '/Api-Integrations',
+  compliance: '/Compliance',
 };
 
 const ROUTE_TABS: Record<string, string> = Object.fromEntries(
@@ -1148,8 +1169,8 @@ function DashboardContent() {
         onLogout={async () => { await logout(); router.push('/login'); }}
       >
           <AnimatePresence mode="wait">
-            {/* 1. DASHBOARD TAB */}
-            {activeTab === 'dashboard' && (
+            {/* 1. DASHBOARD TAB (Gardener) */}
+            {activeTab === 'dashboard' && user.accountType === 'Gardener' && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1426,6 +1447,21 @@ function DashboardContent() {
                   </div>
                 </div>
               </motion.div>
+            )}
+
+            {/* 1b. FARM OVERVIEW TAB (Commercial Farmer) */}
+            {activeTab === 'dashboard' && user.accountType === 'Farmer' && (
+              <FarmerOverviewSection
+                user={user}
+                farms={farms}
+                plants={plants}
+                onViewField={() => openTab('fieldmap')}
+              />
+            )}
+
+            {/* 1c. FIELD MAP TAB (Commercial Farmer) */}
+            {activeTab === 'fieldmap' && user.accountType === 'Farmer' && (
+              <FarmerFieldMapSection farms={farms} plants={plants} />
             )}
 
             {/* 2. MY PLANTS TAB */}
@@ -1822,8 +1858,8 @@ function DashboardContent() {
               </motion.div>
             )}
 
-            {/* 3. AI SCAN LAB TAB */}
-            {activeTab === 'scan' && (
+            {/* 3. AI SCAN LAB TAB (Gardener) */}
+            {activeTab === 'scan' && user.accountType === 'Gardener' && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2214,6 +2250,26 @@ function DashboardContent() {
                   </div>
                 )}
               </motion.div>
+            )}
+
+            {/* 3b. CROP SCANNER TAB (Commercial Farmer) */}
+            {activeTab === 'scan' && user.accountType === 'Farmer' && (
+              <FarmerBatchScanSection farms={farms} onScanComplete={refreshAll} />
+            )}
+
+            {/* 3c. YIELD & RISK ANALYTICS TAB (Commercial Farmer) */}
+            {activeTab === 'analytics' && user.accountType === 'Farmer' && (
+              <FarmerAnalyticsSection farms={farms} />
+            )}
+
+            {/* 3d. IRRIGATION & INPUTS TAB (Commercial Farmer) */}
+            {activeTab === 'irrigation' && user.accountType === 'Farmer' && (
+              <FarmerIrrigationSection farms={farms} plants={plants} />
+            )}
+
+            {/* 3e. LABOR/TASKS TAB (Commercial Farmer) */}
+            {activeTab === 'labor' && user.accountType === 'Farmer' && (
+              <FarmerLaborSection farms={farms} />
             )}
 
             {/* 4. TREATMENTS TAB */}
