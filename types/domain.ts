@@ -25,6 +25,8 @@ export interface FarmField {
   zoneCount: number;
   location?: string;
   acreage?: number;
+  latitude?: number;
+  longitude?: number;
   cropType?: string;
   createdAt: string;
 }
@@ -200,8 +202,10 @@ export interface InventoryBatch {
   unitPrice?: number;
   propagationDate?: string;
   readyDate?: string;
-  status: 'Propagating' | 'Growing' | 'Ready' | 'Sold Out';
+  status: 'Propagating' | 'Growing' | 'Ready' | 'Sold Out' | 'Needs Treatment';
   lowStockThreshold: number;
+  grade?: 'A' | 'B' | 'C';
+  certificateUrl?: string;
   createdAt: string;
 }
 
@@ -211,7 +215,8 @@ export interface Order {
   userId: string;
   customerName: string;
   customerContact?: string;
-  status: 'Pending' | 'Fulfilled' | 'Cancelled';
+  status: 'Pending' | 'Fulfilled' | 'Cancelled' | 'Shipped';
+  dispatchDate?: string;
   totalAmount?: number;
   notes?: string;
   createdAt: string;
@@ -243,4 +248,102 @@ export interface MarketPrice {
   unit: string;
   region?: string;
   recordedOn: string;
+}
+
+// ─── New role feature types (Commercial Farmer / Nursery Operator / Agribusiness Professional) ───
+
+export interface ScanResultItem {
+  imageUrl: string;
+  diagnosis: string;
+  confidence: number;
+  severity: 'Low' | 'Medium' | 'High';
+  symptoms: string;
+}
+
+// Commercial Farmer
+export interface FieldScan {
+  id: string;
+  userId: string;
+  farmId: string;
+  totalSamples: number;
+  healthyCount: number;
+  infectionPercentage: number;
+  results: ScanResultItem[];
+  createdAt: string;
+}
+
+// Commercial Farmer
+export interface IrrigationLog {
+  id: string;
+  userId: string;
+  farmId?: string;
+  logType: 'Irrigation' | 'Fertilizer' | 'Pesticide' | 'Other';
+  amount?: number;
+  unit?: string;
+  notes?: string;
+  loggedOn: string;
+  createdAt: string;
+}
+
+// Nursery Operator
+export interface BatchScan {
+  id: string;
+  userId: string;
+  batchId: string;
+  totalSamples: number;
+  healthyCount: number;
+  infectionPercentage: number;
+  results: ScanResultItem[];
+  createdAt: string;
+}
+
+// Agribusiness Professional
+export interface Organization {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface OrgMember {
+  id: string;
+  orgId: string;
+  email: string;
+  role: 'Owner' | 'Admin' | 'Analyst' | 'Viewer';
+  createdAt: string;
+}
+
+export interface OrganizationFarm {
+  id: string;
+  orgId: string;
+  farmId: string;
+  createdAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  userId: string;
+  label: string;
+  keyPrefix: string;
+  status: 'Active' | 'Revoked';
+  createdAt: string;
+  revokedAt?: string;
+}
+
+export interface ApiUsageLog {
+  id: string;
+  apiKeyId: string;
+  endpoint: string;
+  statusCode: number;
+  requestedAt: string;
+}
+
+export interface AuditReport {
+  id: string;
+  userId: string;
+  farmId?: string;
+  title: string;
+  summary?: string;
+  status: 'Draft' | 'Final';
+  createdAt: string;
 }
