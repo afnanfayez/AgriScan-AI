@@ -61,6 +61,8 @@ declare module 'lucide-react' {
   export const TrendingDown: Icon;
   export const DollarSign: Icon;
   export const ArrowRight: Icon;
+  export const ShieldX: Icon;
+  export const CalendarClock: Icon;
   // Fallback for other icons if needed
   const icons: { [key: string]: Icon };
   export default icons;
