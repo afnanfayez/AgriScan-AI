@@ -79,3 +79,50 @@ export async function uploadImageToStorage(
     return null;
   }
 }
+
+/**
+ * Uploads raw PDF bytes (e.g. from jsPDF's `doc.output('arraybuffer')`) to a
+ * public Supabase Storage bucket. Mirrors uploadImageToStorage's bucket
+ * setup/upload/public-URL flow, just for `application/pdf` content instead
+ * of a base64 image data URL.
+ */
+export async function uploadPdfToStorage(
+  pdfBytes: Buffer | ArrayBuffer,
+  fileName: string,
+  bucketName: string = 'agriscan'
+): Promise<string | null> {
+  try {
+    const adminClient = getSupabaseAdminClient();
+
+    // Ensure the bucket exists AND is set to public.
+    try {
+      await adminClient.storage.createBucket(bucketName, { public: true });
+    } catch {
+      // Bucket already exists — update it to public to be safe
+      await adminClient.storage.updateBucket(bucketName, { public: true });
+    }
+
+    const buffer = Buffer.isBuffer(pdfBytes) ? pdfBytes : Buffer.from(pdfBytes);
+
+    const { data, error } = await adminClient.storage
+      .from(bucketName)
+      .upload(fileName, buffer, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (error) {
+      console.warn('Supabase Storage PDF upload error:', error);
+      return null;
+    }
+
+    const { data: publicUrlData } = adminClient.storage
+      .from(bucketName)
+      .getPublicUrl(fileName);
+
+    return publicUrlData.publicUrl;
+  } catch (error) {
+    console.warn('Failed to upload PDF to Supabase Storage:', error);
+    return null;
+  }
+}
