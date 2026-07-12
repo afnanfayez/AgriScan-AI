@@ -14,6 +14,12 @@ import FarmerBatchScanSection from '@/components/dashboard/farmer-batch-scan-sec
 import FarmerAnalyticsSection from '@/components/dashboard/farmer-analytics-section';
 import FarmerIrrigationSection from '@/components/dashboard/farmer-irrigation-section';
 import FarmerLaborSection from '@/components/dashboard/farmer-labor-section';
+import NurseryOverviewSection from '@/components/dashboard/nursery-overview-section';
+import NurseryBatchesSection from '@/components/dashboard/nursery-batches-section';
+import NurseryHealthScreeningSection from '@/components/dashboard/nursery-health-screening-section';
+import NurseryGradingSection from '@/components/dashboard/nursery-grading-section';
+import NurseryOrdersSection from '@/components/dashboard/nursery-orders-section';
+import NurseryReportsSection from '@/components/dashboard/nursery-reports-section';
 
 // Leaflet touches `window` at module-load time, which crashes SSR — this route
 // is 'use client' but still gets server-rendered for the initial request.
@@ -1471,6 +1477,11 @@ function DashboardContent() {
               <FarmerFieldMapSection farms={farms} plants={plants} />
             )}
 
+            {/* 1d. INVENTORY OVERVIEW TAB (Nursery Operator) */}
+            {activeTab === 'dashboard' && user.accountType === 'Nursery' && (
+              <NurseryOverviewSection />
+            )}
+
             {/* 2. MY PLANTS TAB */}
             {activeTab === 'plants' && (
               <motion.div
@@ -2277,6 +2288,31 @@ function DashboardContent() {
             {/* 3e. LABOR/TASKS TAB (Commercial Farmer) */}
             {activeTab === 'labor' && user.accountType === 'Farmer' && (
               <FarmerLaborSection farms={farms} />
+            )}
+
+            {/* 3f. BATCHES TAB (Nursery Operator) */}
+            {activeTab === 'batches' && user.accountType === 'Nursery' && (
+              <NurseryBatchesSection />
+            )}
+
+            {/* 3g. HEALTH SCREENING TAB (Nursery Operator) */}
+            {activeTab === 'scan' && user.accountType === 'Nursery' && (
+              <NurseryHealthScreeningSection />
+            )}
+
+            {/* 3h. QUALITY GRADING TAB (Nursery Operator) */}
+            {activeTab === 'grading' && user.accountType === 'Nursery' && (
+              <NurseryGradingSection />
+            )}
+
+            {/* 3i. ORDERS & DISPATCH TAB (Nursery Operator) */}
+            {activeTab === 'orders' && user.accountType === 'Nursery' && (
+              <NurseryOrdersSection />
+            )}
+
+            {/* 3j. LOSS & TURNOVER REPORTS TAB (Nursery Operator) */}
+            {activeTab === 'reports' && user.accountType === 'Nursery' && (
+              <NurseryReportsSection />
             )}
 
             {/* 4. TREATMENTS TAB */}
