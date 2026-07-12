@@ -897,6 +897,7 @@ async function seedNursery(userId, userEmail, userName) {
       ready_date: daysAhead(45),
       status: 'Propagating',
       low_stock_threshold: 10,
+      grade: 'A',
     },
     {
       user_id: userId, farm_id: farmId,
@@ -908,6 +909,7 @@ async function seedNursery(userId, userEmail, userName) {
       ready_date: daysAgo(5),
       status: 'Ready',
       low_stock_threshold: 20,
+      grade: 'A',
     },
     {
       user_id: userId, farm_id: farmId,
@@ -917,8 +919,9 @@ async function seedNursery(userId, userEmail, userName) {
       unit_price: 9.00,
       propagation_date: daysAgo(40),
       ready_date: daysAhead(30),
-      status: 'Growing',
+      status: 'Needs Treatment',
       low_stock_threshold: 5,
+      grade: 'B',
     },
     {
       user_id: userId, farm_id: farmId,
@@ -930,8 +933,26 @@ async function seedNursery(userId, userEmail, userName) {
       ready_date: daysAgo(30),
       status: 'Sold Out',
       low_stock_threshold: 15,
+      grade: 'C',
     },
   ]).select();
+
+  // ── Batch health screening (Iris — matches the Ink Disease scan above) ─────
+  if (batches && batches[2]) {
+    console.log('  [Nursery] Adding batch health screening...');
+    await supabase.from('batch_scans').insert({
+      user_id: userId,
+      batch_id: batches[2].id,
+      total_samples: 10,
+      healthy_count: 4,
+      infection_percentage: 60,
+      results: [
+        { imageUrl: 'https://images.unsplash.com/photo-1490750967868-88df5691cc1e?w=400&h=300&fit=crop', diagnosis: 'Ink Disease (Drechslera iridis)', confidence: 82, severity: 'Medium', symptoms: 'Dark brown irregular leaf spotting with yellow halos.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1490750967868-88df5691cc1e?w=400&h=300&fit=crop', diagnosis: 'Ink Disease (Drechslera iridis)', confidence: 76, severity: 'Medium', symptoms: 'Soft rot at base of propagation plug.' },
+        { imageUrl: 'https://images.unsplash.com/photo-1490750967868-88df5691cc1e?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 91, severity: 'Low', symptoms: 'No visible symptoms.' },
+      ],
+    });
+  }
 
   // ── Suppliers ─────────────────────────────────────────────────────────────
   console.log('  [Nursery] Adding suppliers...');
