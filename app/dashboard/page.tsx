@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth-context';
 import DashboardShell from '@/components/dashboard/dashboard-shell';
@@ -9,11 +10,17 @@ import CarePlansSection from '@/components/dashboard/care-plans-section';
 import CommunitySection from '@/components/dashboard/community-section';
 import SettingsSection from '@/components/dashboard/settings-section';
 import FarmerOverviewSection from '@/components/dashboard/farmer-overview-section';
-import FarmerFieldMapSection from '@/components/dashboard/farmer-field-map-section';
 import FarmerBatchScanSection from '@/components/dashboard/farmer-batch-scan-section';
 import FarmerAnalyticsSection from '@/components/dashboard/farmer-analytics-section';
 import FarmerIrrigationSection from '@/components/dashboard/farmer-irrigation-section';
 import FarmerLaborSection from '@/components/dashboard/farmer-labor-section';
+
+// Leaflet touches `window` at module-load time, which crashes SSR — this route
+// is 'use client' but still gets server-rendered for the initial request.
+const FarmerFieldMapSection = dynamic(
+  () => import('@/components/dashboard/farmer-field-map-section'),
+  { ssr: false, loading: () => <div className="p-6 text-sm text-stone-500">Loading map…</div> }
+);
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sprout,
