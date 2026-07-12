@@ -70,7 +70,7 @@ export default function FarmerIrrigationSection({ farms, plants }: FarmerIrrigat
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          setLogs(data.irrigationLogs);
+          setLogs(data.logs);
         } else {
           setError(data.error || 'Failed to load irrigation logs.');
         }

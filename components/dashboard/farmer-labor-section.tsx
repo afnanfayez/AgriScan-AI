@@ -59,7 +59,7 @@ export default function FarmerLaborSection({ farms }: FarmerLaborSectionProps) {
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          setTasks(data.farmTasks);
+          setTasks(data.tasks);
         } else {
           setError(data.error || 'Failed to load tasks.');
         }
