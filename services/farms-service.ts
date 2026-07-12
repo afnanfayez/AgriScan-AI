@@ -13,6 +13,8 @@ const mapFarm = (f: any): FarmField => ({
   location: f.location ?? undefined,
   acreage: f.acreage ?? undefined,
   cropType: f.crop_type ?? undefined,
+  latitude: f.latitude ?? undefined,
+  longitude: f.longitude ?? undefined,
   createdAt: f.created_at,
 });
 
