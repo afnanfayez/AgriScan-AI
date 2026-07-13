@@ -2,7 +2,8 @@
 
 import { motion } from 'motion/react';
 import type React from 'react';
-import { AlertTriangle, CheckCircle, Loader2, MapPin, Settings, Sliders, Sparkles, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Building2, CheckCircle, Loader2, MapPin, Settings, Sliders, Sparkles, User } from 'lucide-react';
 
 type Units = 'metric' | 'imperial';
 type Plan = 'Free' | 'Pro' | 'Enterprise';
@@ -34,6 +35,108 @@ const accountTypes: Array<{ value: AccountType; label: string; detail: string }>
 ];
 
 const plans: Plan[] = ['Free', 'Pro', 'Enterprise'];
+
+function OrganizationSettingsCard() {
+  const [orgId, setOrgId] = useState('');
+  const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    fetch('/api/organizations')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setOrgId(data.organization.id);
+          setName(data.organization.name);
+        } else {
+          setError(data.error || 'Failed to load organization.');
+        }
+      })
+      .catch(() => setError('Failed to load organization.'))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setIsSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/organizations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSuccess('Organization name updated.');
+      } else {
+        setError(data.error || 'Failed to update organization.');
+      }
+    } catch {
+      setError('Failed to update organization.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <div className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <h2 className="text-sm font-bold text-stone-950 dark:text-slate-50">Organization Info</h2>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-slate-400">
+        The organization name shown across Multi-Farm Manager, Team &amp; Roles, and exported compliance reports.
+      </p>
+
+      {isLoading ? (
+        <div className="mt-4 flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block flex-1">
+            <span className="text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">Organization Name</span>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!orgId}
+              className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={isSaving || !orgId}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            <span>Save</span>
+          </button>
+        </form>
+      )}
+
+      {(error || success) && (
+        <div
+          className={`mt-3 flex items-start gap-2 rounded-xl border p-3 text-xs ${
+            error
+              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+          }`}
+        >
+          {error ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span>{error || success}</span>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function SettingsSection({
   user,
@@ -217,6 +320,8 @@ export default function SettingsSection({
           </div>
         </aside>
       </form>
+
+      {user.accountType === 'Agribusiness' && <OrganizationSettingsCard />}
     </motion.div>
   );
 }
