@@ -31,6 +31,7 @@ interface AgribusinessAnalytics {
   healthTrend: { date: string; healthScore: number }[];
   farmComparison: FarmComparisonRow[];
   monthlyHeatmap: HeatmapCell[];
+  orgAverageInfectionRate: number;
 }
 
 type SortKey = 'farmName' | 'area' | 'infectionRate' | 'estimatedCostImpact';
@@ -98,11 +99,27 @@ export default function AgribusinessAnalyticsSection() {
     return map;
   }, [analytics]);
 
+  const orgAvg = analytics?.orgAverageInfectionRate ?? 0;
+
   const columns: TableColumn<FarmComparisonRow & { id: string }>[] = [
     { key: 'farmName', header: 'Farm' },
     { key: 'area', header: 'Area', render: (row) => `${row.area.toLocaleString()} acres` },
     { key: 'infectionRate', header: 'Infection Rate', render: (row) => `${row.infectionRate}%` },
     { key: 'estimatedCostImpact', header: 'Est. Cost Impact', render: (row) => `$${row.estimatedCostImpact.toLocaleString()}` },
+    {
+      key: 'vsOrgAvg',
+      header: 'vs Org Average',
+      render: (row) => {
+        const delta = row.infectionRate - orgAvg;
+        if (delta === 0) return <span className="text-stone-400 dark:text-slate-500">On par</span>;
+        const better = delta < 0;
+        return (
+          <span className={better ? 'font-medium text-emerald-600 dark:text-emerald-400' : 'font-medium text-red-600 dark:text-red-400'}>
+            {better ? '' : '+'}{delta}% {better ? 'below' : 'above'} avg
+          </span>
+        );
+      },
+    },
   ];
 
   const sortOptions: { key: SortKey; label: string }[] = [
@@ -201,7 +218,7 @@ export default function AgribusinessAnalyticsSection() {
           <Card>
             <CardHeader
               title="Farm Comparison"
-              subtitle="Area, infection rate, and estimated cost impact side by side."
+              subtitle={`Area, infection rate, and estimated cost impact side by side. Org average infection rate: ${orgAvg}%.`}
               action={
                 <div className="flex items-center gap-2">
                   <select

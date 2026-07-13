@@ -15,6 +15,7 @@ export interface AgribusinessAnalytics {
   healthTrend: { date: string; healthScore: number }[]; // org-wide healthScore over time, derived from field_scans across all linked farms grouped by created_at date, chronological order
   farmComparison: { farmId: string; farmName: string; area: number; infectionRate: number; estimatedCostImpact: number }[]; // one row per linked farm
   monthlyHeatmap: { farmId: string; farmName: string; month: string; healthScore: number }[]; // month format 'YYYY-MM', one row per farm per month present in its field_scans history
+  orgAverageInfectionRate: number; // mean of farmComparison[].infectionRate, for benchmarking a farm against the org average
 }
 
 const classifyHealthScore = (healthScore: number): 'Healthy' | 'Warning' | 'Critical' => {
@@ -32,6 +33,7 @@ const EMPTY_ANALYTICS: AgribusinessAnalytics = {
   healthTrend: [],
   farmComparison: [],
   monthlyHeatmap: [],
+  orgAverageInfectionRate: 0,
 };
 
 /**
@@ -197,6 +199,10 @@ export async function getAgribusinessAnalytics(
       };
     });
 
+  const orgAverageInfectionRate = farmComparison.length > 0
+    ? Math.round(farmComparison.reduce((sum, f) => sum + f.infectionRate, 0) / farmComparison.length)
+    : 0;
+
   return {
     totalFarms: farms.length,
     totalManagedPlants,
@@ -206,5 +212,6 @@ export async function getAgribusinessAnalytics(
     healthTrend,
     farmComparison,
     monthlyHeatmap,
+    orgAverageInfectionRate,
   };
 }
