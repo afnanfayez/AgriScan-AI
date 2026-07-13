@@ -9,7 +9,6 @@ interface OnboardChoices {
   accountType?: AccountType;
   location?: string;
   units?: 'metric' | 'imperial';
-  plan?: 'Free' | 'Pro' | 'Enterprise';
   firstFarmName?: string;
 }
 
@@ -28,6 +27,8 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string, accountType: AccountType) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   onboard: (choices: OnboardChoices) => Promise<{ success: boolean; error?: string }>;
+  startCheckout: (plan: 'Pro' | 'Enterprise') => Promise<{ success: boolean; url?: string; error?: string }>;
+  openBillingPortal: () => Promise<{ success: boolean; url?: string; error?: string }>;
   refreshAll: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -160,6 +161,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: true };
       }
       return { success: false, error: data.error || 'Onboarding failed' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  const startCheckout = async (plan: 'Pro' | 'Enterprise') => {
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, url: data.url };
+      }
+      return { success: false, error: data.error || 'Failed to start checkout' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
+    }
+  };
+
+  const openBillingPortal = async () => {
+    try {
+      const res = await fetch('/api/billing/portal', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, url: data.url };
+      }
+      return { success: false, error: data.error || 'Failed to open billing portal' };
     } catch (err: any) {
       return { success: false, error: err.message || 'An error occurred' };
     }
@@ -300,6 +331,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signup,
         logout,
         onboard,
+        startCheckout,
+        openBillingPortal,
         refreshAll,
         refreshNotifications,
         markAllNotificationsRead,
