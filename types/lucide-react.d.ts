@@ -46,7 +46,7 @@ declare module 'lucide-react' {
   export const Mail: Icon;
   export const Trash: Icon;
   export const Trash2: Icon;
-  // New role dashboards (Commercial Farmer / Nursery Operator / Agribusiness)
+  // New role dashboards (Commercial Farmer / Nursery Operator)
   export const Map: Icon;
   export const ChartLine: Icon;
   export const ClipboardList: Icon;
@@ -63,7 +63,6 @@ declare module 'lucide-react' {
   export const ArrowRight: Icon;
   export const ShieldX: Icon;
   export const CalendarClock: Icon;
-  // Agribusiness (Enterprise Dashboard / Multi-Farm / Team / API keys / Compliance)
   export const ArrowDownAZ: Icon;
   export const ArrowUpAZ: Icon;
   export const Copy: Icon;

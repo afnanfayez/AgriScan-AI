@@ -20,12 +20,6 @@ import NurseryHealthScreeningSection from '@/components/dashboard/nursery-health
 import NurseryGradingSection from '@/components/dashboard/nursery-grading-section';
 import NurseryOrdersSection from '@/components/dashboard/nursery-orders-section';
 import NurseryReportsSection from '@/components/dashboard/nursery-reports-section';
-import AgribusinessOverviewSection from '@/components/dashboard/agribusiness-overview-section';
-import AgribusinessMultifarmSection from '@/components/dashboard/agribusiness-multifarm-section';
-import AgribusinessAnalyticsSection from '@/components/dashboard/agribusiness-analytics-section';
-import AgribusinessTeamSection from '@/components/dashboard/agribusiness-team-section';
-import AgribusinessApikeysSection from '@/components/dashboard/agribusiness-apikeys-section';
-import AgribusinessComplianceSection from '@/components/dashboard/agribusiness-compliance-section';
 
 // Leaflet touches `window` at module-load time, which crashes SSR — this route
 // is 'use client' but still gets server-rendered for the initial request.
@@ -82,11 +76,6 @@ const TAB_ROUTES: Record<string, string> = {
   grading: '/Quality-Grading',
   orders: '/Orders',
   reports: '/Loss-Reports',
-  // Agribusiness
-  multifarm: '/Multi-Farm',
-  team: '/Team',
-  apikeys: '/Api-Integrations',
-  compliance: '/Compliance',
 };
 
 const ROUTE_TABS: Record<string, string> = Object.fromEntries(
@@ -157,6 +146,8 @@ function DashboardContent() {
   const [plantSearch, setPlantSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddPlantModal, setShowAddPlantModal] = useState(false);
+  const [plantPendingDelete, setPlantPendingDelete] = useState<any | null>(null);
+  const [isDeletingPlant, setIsDeletingPlant] = useState(false);
   
   // Add Plant Form
   const [newPlantName, setNewPlantName] = useState('');
@@ -215,7 +206,7 @@ function DashboardContent() {
   const [settingsLocation, setSettingsLocation] = useState('');
   const [settingsUnits, setSettingsUnits] = useState<'metric' | 'imperial'>('metric');
   const [settingsPlan, setSettingsPlan] = useState<'Free' | 'Pro' | 'Enterprise'>('Free');
-  const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
+  const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery'>('Gardener');
   const [settingsAvatarUrl, setSettingsAvatarUrl] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
@@ -545,16 +536,23 @@ function DashboardContent() {
 
   // Delete Plant Handler
   const handleDeletePlant = async (id: string) => {
-    if (!confirm('Are you absolutely sure you want to delete this plant and all associated history?')) return;
+    setIsDeletingPlant(true);
     try {
       const res = await fetch(`/api/plants?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
+        setPlantPendingDelete(null);
         openPlantsList();
         await refreshAll();
+        showToast('Plant and associated history deleted.');
+      } else {
+        showToast(data.error || 'Could not delete this plant. Please try again.');
       }
     } catch (error) {
       console.error('Failed to delete plant:', error);
+      showToast('Could not delete this plant. Please try again.');
+    } finally {
+      setIsDeletingPlant(false);
     }
   };
 
@@ -1516,36 +1514,6 @@ function DashboardContent() {
               <NurseryOverviewSection />
             )}
 
-            {/* 1e. ENTERPRISE DASHBOARD TAB (Agribusiness Professional) */}
-            {activeTab === 'dashboard' && user.accountType === 'Agribusiness' && (
-              <AgribusinessOverviewSection farms={farms} plants={plants} />
-            )}
-
-            {/* 1f. MULTI-FARM MANAGER TAB (Agribusiness Professional) */}
-            {activeTab === 'multifarm' && user.accountType === 'Agribusiness' && (
-              <AgribusinessMultifarmSection farms={farms} plants={plants} />
-            )}
-
-            {/* 1g. CROSS-FARM ANALYTICS TAB (Agribusiness Professional) */}
-            {activeTab === 'analytics' && user.accountType === 'Agribusiness' && (
-              <AgribusinessAnalyticsSection />
-            )}
-
-            {/* 1h. TEAM & ROLES MANAGEMENT TAB (Agribusiness Professional) */}
-            {activeTab === 'team' && user.accountType === 'Agribusiness' && (
-              <AgribusinessTeamSection />
-            )}
-
-            {/* 1i. API & INTEGRATIONS TAB (Agribusiness Professional) */}
-            {activeTab === 'apikeys' && user.accountType === 'Agribusiness' && (
-              <AgribusinessApikeysSection />
-            )}
-
-            {/* 1j. COMPLIANCE & AUDIT REPORTS TAB (Agribusiness Professional) */}
-            {activeTab === 'compliance' && user.accountType === 'Agribusiness' && (
-              <AgribusinessComplianceSection farms={farms} />
-            )}
-
             {/* 2. MY PLANTS TAB */}
             {activeTab === 'plants' && (
               <motion.div
@@ -1748,7 +1716,7 @@ function DashboardContent() {
                                 <span>Scan Plant</span>
                               </button>
                               <button
-                                onClick={() => handleDeletePlant(plant.id)}
+                                onClick={() => setPlantPendingDelete(plant)}
                                 className="flex-1 sm:flex-none px-4 py-2.5 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:border-red-300 dark:hover:border-red-800 rounded-xl text-xs font-semibold cursor-pointer transition-all flex items-center justify-center space-x-1.5"
                               >
                                 <Trash className="h-4 w-4" />
@@ -2525,7 +2493,6 @@ function DashboardContent() {
                       <option value="Gardener">≡اî▒ Home / Hobbyist Gardener</option>
                       <option value="Farmer">≡اأ£ Commercial Farmer</option>
                       <option value="Nursery">≡اî┐ Farm Dashboard / Nursery Operator</option>
-                      <option value="Agribusiness">≡ات Agribusiness Professional</option>
                     </select>
                     {settingsAccountType !== user.accountType && (
                       <p className="text-[11px] text-amber-600 mt-1.5">
@@ -2639,6 +2606,48 @@ function DashboardContent() {
                 Register Crop
               </button>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {plantPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/50 p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-6 shadow-xl dark:border-red-500/25 dark:bg-slate-900"
+          >
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl bg-red-50 p-3 text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                <Trash className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold tracking-tight text-stone-950 dark:text-slate-50">Delete plant?</h2>
+                <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">
+                  This will delete <span className="font-semibold text-stone-950 dark:text-slate-50">{plantPendingDelete.name}</span> and all associated scan, treatment, reminder, and note history.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPlantPendingDelete(null)}
+                disabled={isDeletingPlant}
+                className="inline-flex items-center justify-center rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-xs font-bold text-stone-700 transition hover:bg-stone-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeletePlant(plantPendingDelete.id)}
+                disabled={isDeletingPlant}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+              >
+                {isDeletingPlant ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash className="h-4 w-4" />}
+                <span>{isDeletingPlant ? 'Deleting...' : 'Delete Plant'}</span>
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

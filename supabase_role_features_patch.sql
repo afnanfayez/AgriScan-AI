@@ -10,7 +10,7 @@
 -- database - only that the base schema is in place.
 --
 -- Adds the tables/columns needed so each account_type (Gardener,
--- Farmer, Nursery, Agribusiness) gets a genuinely different backend,
+-- Farmer and Nursery) gets a genuinely different backend,
 -- while reusing the existing profiles.account_type field and farms
 -- table as the universal "operation location" for every role.
 --
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.care_reminders (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Commercial Farmer + Agribusiness: cost/revenue tracking
+-- Commercial Farmer: cost/revenue tracking
 CREATE TABLE IF NOT EXISTS public.expenses (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS public.equipment (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Commercial Farmer (worker scheduling) / Agribusiness (team tasks)
+-- Commercial Farmer (worker scheduling)
 CREATE TABLE IF NOT EXISTS public.farm_tasks (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Agribusiness Professional: market price trend reference data.
+-- Market price trend reference data.
 -- Seeded below with illustrative sample data only - not a live feed.
 CREATE TABLE IF NOT EXISTS public.market_prices (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,

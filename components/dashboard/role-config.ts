@@ -2,7 +2,6 @@ import {
   CloudSun, Sprout, Camera, Heart, Users, Settings, type Icon,
   Map, ChartLine, Droplets, ClipboardList,
   Boxes, ShieldCheck, Truck, ChartPie,
-  Building2, ChartBar, UsersRound, KeyRound, FileCheck,
 } from 'lucide-react';
 import type { AccountType } from '@/types/domain';
 
@@ -12,9 +11,7 @@ export interface DashboardTabConfig {
     // Commercial Farmer
     | 'fieldmap' | 'analytics' | 'irrigation' | 'labor'
     // Nursery Operator
-    | 'batches' | 'grading' | 'orders' | 'reports'
-    // Agribusiness
-    | 'multifarm' | 'team' | 'apikeys' | 'compliance';
+    | 'batches' | 'grading' | 'orders' | 'reports';
   label: string;
   icon: Icon;
   accent?: boolean;
@@ -74,21 +71,6 @@ export const ROLE_CONFIG: Record<AccountType, RoleConfig> = {
     overviewTitle: 'Inventory Overview',
     overviewSubtitle: 'Current stock health across your growing sites.',
     locationLabel: 'Site',
-    planBadgeLabel: 'Plan',
-  },
-  Agribusiness: {
-    tabs: [
-      { id: 'dashboard', label: 'Enterprise Dashboard', icon: Building2 },
-      { id: 'multifarm', label: 'Multi-Farm Manager', icon: Map },
-      { id: 'analytics', label: 'Cross-Farm Analytics', icon: ChartBar },
-      { id: 'team', label: 'Team & Roles Management', icon: UsersRound },
-      { id: 'apikeys', label: 'API & Integrations', icon: KeyRound },
-      { id: 'compliance', label: 'Compliance & Audit Reports', icon: FileCheck },
-      { id: 'settings', label: 'Settings', icon: Settings },
-    ],
-    overviewTitle: 'Portfolio Overview',
-    overviewSubtitle: 'Aggregated performance across all locations.',
-    locationLabel: 'Location',
     planBadgeLabel: 'Plan',
   },
 };

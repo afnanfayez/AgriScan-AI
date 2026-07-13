@@ -4,7 +4,7 @@
 // The single role field (profiles.account_type) that drives which dashboard
 // experience a user sees. Reused as-is rather than introducing a parallel
 // "operation_type" column - see supabase_role_features_patch.sql.
-export type AccountType = 'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness';
+export type AccountType = 'Gardener' | 'Farmer' | 'Nursery';
 
 export interface UserProfile {
   id: string;
@@ -153,7 +153,7 @@ export interface CareReminder {
   createdAt: string;
 }
 
-// Commercial Farmer + Agribusiness Professional
+// Commercial Farmer
 export interface Expense {
   id: string;
   userId: string;
@@ -179,7 +179,7 @@ export interface Equipment {
   createdAt: string;
 }
 
-// Commercial Farmer (worker scheduling) / Agribusiness (team tasks)
+// Commercial Farmer (worker scheduling)
 export interface FarmTask {
   id: string;
   userId: string;
@@ -241,17 +241,7 @@ export interface Supplier {
   createdAt: string;
 }
 
-// Agribusiness Professional (reference data, not user-owned)
-export interface MarketPrice {
-  id: string;
-  cropType: string;
-  avgPrice: number;
-  unit: string;
-  region?: string;
-  recordedOn: string;
-}
-
-// ─── New role feature types (Commercial Farmer / Nursery Operator / Agribusiness Professional) ───
+// ─── New role feature types (Commercial Farmer / Nursery Operator) ───
 
 export interface ScanResultItem {
   imageUrl: string;
@@ -302,56 +292,5 @@ export interface BatchScan {
   healthyCount: number;
   infectionPercentage: number;
   results: ScanResultItem[];
-  createdAt: string;
-}
-
-// Agribusiness Professional
-export interface Organization {
-  id: string;
-  ownerUserId: string;
-  name: string;
-  createdAt: string;
-}
-
-export interface OrgMember {
-  id: string;
-  orgId: string;
-  email: string;
-  role: 'Owner' | 'Admin' | 'Analyst' | 'Viewer';
-  createdAt: string;
-}
-
-export interface OrganizationFarm {
-  id: string;
-  orgId: string;
-  farmId: string;
-  createdAt: string;
-}
-
-export interface ApiKey {
-  id: string;
-  userId: string;
-  label: string;
-  keyPrefix: string;
-  status: 'Active' | 'Revoked';
-  createdAt: string;
-  revokedAt?: string;
-}
-
-export interface ApiUsageLog {
-  id: string;
-  apiKeyId: string;
-  endpoint: string;
-  statusCode: number;
-  requestedAt: string;
-}
-
-export interface AuditReport {
-  id: string;
-  userId: string;
-  farmId?: string;
-  title: string;
-  summary?: string;
-  status: 'Draft' | 'Final';
   createdAt: string;
 }

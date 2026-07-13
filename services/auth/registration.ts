@@ -136,7 +136,7 @@ export async function verifyEmail(
   const userName = pendingData.name || normalizedEmail.split('@')[0];
 
   // Create default farm for relevant account types
-  if (['Farmer', 'Nursery', 'Agribusiness'].includes(accountType)) {
+  if (['Farmer', 'Nursery'].includes(accountType)) {
     const { error: farmError } = await adminClient
       .from('farms')
       .insert({

@@ -267,7 +267,6 @@ function RegisterForm() {
               <option value="Gardener">🌱 Home / Hobbyist Gardener</option>
               <option value="Farmer">🚜 Commercial Farmer</option>
               <option value="Nursery">🌿 Farm Dashboard / Nursery Operator</option>
-              <option value="Agribusiness">🏢 Agribusiness Professional</option>
             </select>
           </div>
 

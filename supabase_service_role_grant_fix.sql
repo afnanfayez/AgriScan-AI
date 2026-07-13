@@ -34,18 +34,11 @@ GRANT ALL ON public.inventory_batches  TO service_role;
 GRANT ALL ON public.orders             TO service_role;
 GRANT ALL ON public.order_items        TO service_role;
 GRANT ALL ON public.suppliers          TO service_role;
-GRANT ALL ON public.market_prices      TO service_role;
 
 -- New role tables (added by supabase_new_roles_patch.sql)
 GRANT ALL ON public.field_scans        TO service_role;
 GRANT ALL ON public.irrigation_logs    TO service_role;
 GRANT ALL ON public.batch_scans        TO service_role;
-GRANT ALL ON public.organizations      TO service_role;
-GRANT ALL ON public.org_members        TO service_role;
-GRANT ALL ON public.organization_farms TO service_role;
-GRANT ALL ON public.api_keys           TO service_role;
-GRANT ALL ON public.api_usage_logs     TO service_role;
-GRANT ALL ON public.audit_reports      TO service_role;
 
 -- Sequences (needed for uuid_generate_v4 default values to work)
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO service_role;

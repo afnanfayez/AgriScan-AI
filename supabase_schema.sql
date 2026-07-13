@@ -10,7 +10,7 @@ create table public.profiles (
     email text not null,
     name text,
     avatar_url text,
-    account_type text check (account_type in ('Gardener', 'Farmer', 'Nursery', 'Agribusiness')) default 'Gardener',
+    account_type text check (account_type in ('Gardener', 'Farmer', 'Nursery')) default 'Gardener',
     location text,
     units text check (units in ('metric', 'imperial')) default 'metric',
     plan text check (plan in ('Free', 'Pro', 'Enterprise')) default 'Free',

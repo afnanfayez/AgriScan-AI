@@ -7,8 +7,6 @@ const PROTECTED_PREFIXES = [
   "/Field-Map", "/Crop-Scanner", "/Yield-Analytics", "/Irrigation", "/Labor",
   // Nursery Operator
   "/Batches", "/Health-Screening", "/Quality-Grading", "/Orders", "/Loss-Reports",
-  // Agribusiness
-  "/Multi-Farm", "/Cross-Farm-Analytics", "/Team", "/Api-Integrations", "/Compliance",
 ];
 const AUTH_ONLY_PREFIXES = ["/login", "/register"];
 
