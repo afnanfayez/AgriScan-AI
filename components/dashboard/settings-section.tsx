@@ -2,18 +2,24 @@
 
 import { motion } from 'motion/react';
 import type React from 'react';
-import { AlertTriangle, Camera, CheckCircle, Loader2, MapPin, Settings, Sliders, Sparkles, User, X } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle, DollarSign, Loader2, MapPin, Settings, Sliders, Sparkles, User, X } from 'lucide-react';
 
 type Units = 'metric' | 'imperial';
 type Plan = 'Free' | 'Pro' | 'Enterprise';
 type AccountType = 'Gardener' | 'Farmer' | 'Nursery';
+
+interface BillingSubscription {
+  plan: Plan;
+  status: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
 
 interface SettingsSectionProps {
   user: any;
   settingsName: string;
   settingsLocation: string;
   settingsUnits: Units;
-  settingsPlan: Plan;
   settingsAccountType: AccountType;
   settingsAvatarUrl: string;
   settingsError: string;
@@ -22,10 +28,14 @@ interface SettingsSectionProps {
   onNameChange: (value: string) => void;
   onLocationChange: (value: string) => void;
   onUnitsChange: (value: Units) => void;
-  onPlanChange: (value: Plan) => void;
   onAccountTypeChange: (value: AccountType) => void;
   onAvatarChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
+  billingSubscription: BillingSubscription | null;
+  billingActionLoading: boolean;
+  billingError: string;
+  onUpgradePlan: (plan: 'Pro' | 'Enterprise') => void;
+  onManageBilling: () => void;
 }
 
 const accountTypes: Array<{ value: AccountType; label: string; detail: string }> = [
@@ -34,14 +44,17 @@ const accountTypes: Array<{ value: AccountType; label: string; detail: string }>
   { value: 'Nursery', label: 'Nursery Operator', detail: 'Inventory, batches, and growing sites' },
 ];
 
-const plans: Plan[] = ['Free', 'Pro', 'Enterprise'];
+const planCopy: Record<Plan, { price: string; detail: string }> = {
+  Free: { price: '$0', detail: 'Up to 5 AI scans/mo' },
+  Pro: { price: '$29/mo', detail: 'Unlimited AI scans + advanced reports' },
+  Enterprise: { price: '$149/mo', detail: 'Unlimited AI scans + multi-farm management' },
+};
 
 export default function SettingsSection({
   user,
   settingsName,
   settingsLocation,
   settingsUnits,
-  settingsPlan,
   settingsAccountType,
   settingsAvatarUrl,
   settingsError,
@@ -50,11 +63,17 @@ export default function SettingsSection({
   onNameChange,
   onLocationChange,
   onUnitsChange,
-  onPlanChange,
   onAccountTypeChange,
   onAvatarChange,
   onSubmit,
+  billingSubscription,
+  billingActionLoading,
+  billingError,
+  onUpgradePlan,
+  onManageBilling,
 }: SettingsSectionProps) {
+  const currentPlan: Plan = billingSubscription?.plan || user.plan || 'Free';
+
   const handleAvatarFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -197,25 +216,7 @@ export default function SettingsSection({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
-                <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                Plan Tier
-              </span>
-              <select
-                value={settingsPlan}
-                onChange={(event) => onPlanChange(event.target.value as Plan)}
-                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
-              >
-                {plans.map((plan) => (
-                  <option key={plan} value={plan}>
-                    {plan}
-                  </option>
-                ))}
-              </select>
-            </label>
-
+          <div className="mt-6">
             <label className="block">
               <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
                 <Settings className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -251,24 +252,92 @@ export default function SettingsSection({
           </button>
         </section>
 
-        <aside className="self-start rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-sm font-bold text-stone-950 dark:text-slate-50">Current Workspace</h2>
-          <div className="mt-4 space-y-3">
-            {accountTypes.map((type) => (
-              <div
-                key={type.value}
-                className={`rounded-xl border p-3 ${
-                  settingsAccountType === type.value
-                    ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-400/50 dark:bg-emerald-500/10'
-                    : 'border-stone-100 bg-stone-50 dark:border-slate-800 dark:bg-slate-950/60'
-                }`}
-              >
-                <p className="text-xs font-bold text-stone-900 dark:text-slate-100">{type.label}</p>
-                <p className="mt-1 text-[11px] leading-4 text-stone-500 dark:text-slate-400">{type.detail}</p>
+        <div className="space-y-6">
+          <aside className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-stone-950 dark:text-slate-50">
+              <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Billing
+            </h2>
+
+            <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-stone-900 dark:text-slate-100">{currentPlan} Plan</span>
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{planCopy[currentPlan].price}</span>
               </div>
-            ))}
-          </div>
-        </aside>
+              <p className="mt-1 text-[11px] leading-4 text-stone-500 dark:text-slate-400">{planCopy[currentPlan].detail}</p>
+              {billingSubscription?.status && currentPlan !== 'Free' && (
+                <p className="mt-2 text-[11px] leading-4 text-stone-500 dark:text-slate-400">
+                  Status: <span className="font-semibold">{billingSubscription.status}</span>
+                  {billingSubscription.cancelAtPeriodEnd && billingSubscription.currentPeriodEnd && (
+                    <> — cancels on {new Date(billingSubscription.currentPeriodEnd).toLocaleDateString()}</>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {billingError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-[11px] leading-4 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                {billingError}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-2">
+              {currentPlan === 'Free' ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={billingActionLoading}
+                    onClick={() => onUpgradePlan('Pro')}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                  >
+                    {billingActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                    <span>Upgrade to Pro — $29/mo</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={billingActionLoading}
+                    onClick={() => onUpgradePlan('Enterprise')}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-bold text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <span>Upgrade to Enterprise — $149/mo</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={billingActionLoading}
+                  onClick={onManageBilling}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                >
+                  {billingActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                  <span>Manage Billing</span>
+                </button>
+              )}
+            </div>
+            <p className="mt-3 text-[11px] leading-4 text-stone-400 dark:text-slate-500">
+              Billing is handled securely by Stripe. Manage Billing lets you update your card, view invoices, downgrade, or cancel.
+            </p>
+          </aside>
+
+          <aside className="self-start rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-sm font-bold text-stone-950 dark:text-slate-50">Current Workspace</h2>
+            <div className="mt-4 space-y-3">
+              {accountTypes.map((type) => (
+                <div
+                  key={type.value}
+                  className={`rounded-xl border p-3 ${
+                    settingsAccountType === type.value
+                      ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-400/50 dark:bg-emerald-500/10'
+                      : 'border-stone-100 bg-stone-50 dark:border-slate-800 dark:bg-slate-950/60'
+                  }`}
+                >
+                  <p className="text-xs font-bold text-stone-900 dark:text-slate-100">{type.label}</p>
+                  <p className="mt-1 text-[11px] leading-4 text-stone-500 dark:text-slate-400">{type.detail}</p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
       </form>
     </motion.div>
   );

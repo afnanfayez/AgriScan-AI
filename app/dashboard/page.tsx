@@ -96,6 +96,8 @@ function DashboardContent() {
     unreadCount,
     logout,
     onboard,
+    startCheckout,
+    openBillingPortal,
     refreshAll,
     markAllNotificationsRead,
   } = useAuth();
@@ -123,6 +125,23 @@ function DashboardContent() {
       }
     }
   }, [plantIdParam, selectedPlantId, activeTab, setSelectedPlantId, setActiveTab]);
+
+  // After returning from Stripe Checkout, refresh so the plan upgrade the
+  // webhook applied (asynchronously, possibly a beat before this redirect)
+  // shows up, then strip the query param so a refresh doesn't re-fire this.
+  useEffect(() => {
+    const checkoutStatus = searchParams?.get('checkout');
+    if (!checkoutStatus) return;
+
+    if (checkoutStatus === 'success') {
+      refreshAll();
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('checkout');
+    router.replace(url.pathname + url.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Onboarding wizard state
   const [onboardStep, setOnboardStep] = useState(1);
@@ -205,7 +224,6 @@ function DashboardContent() {
   const [settingsName, setSettingsName] = useState('');
   const [settingsLocation, setSettingsLocation] = useState('');
   const [settingsUnits, setSettingsUnits] = useState<'metric' | 'imperial'>('metric');
-  const [settingsPlan, setSettingsPlan] = useState<'Free' | 'Pro' | 'Enterprise'>('Free');
   const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery'>('Gardener');
   const [settingsAvatarUrl, setSettingsAvatarUrl] = useState('');
   const [settingsError, setSettingsError] = useState('');
@@ -362,7 +380,6 @@ function DashboardContent() {
         setSettingsName(user.name || '');
         setSettingsLocation(user.location || '');
         setSettingsUnits(user.units || 'metric');
-        setSettingsPlan(user.plan || 'Free');
         setSettingsAccountType(user.accountType || 'Gardener');
         setSettingsAvatarUrl(user.avatarUrl || '');
       }, 0);
@@ -475,24 +492,40 @@ function DashboardContent() {
     }
   };
 
-  // Onboard Handler
+  // Onboard Handler. `plan` is never sent here — Free is the DB default for
+  // every new account, and Pro/Enterprise can only be granted by the Stripe
+  // webhook once a real payment completes (see the checkout redirect below).
   const handleOnboardSubmit = async () => {
     setIsSubmitting(true);
     const res = await onboard({
       accountType: user?.accountType,
       location: onboardLocation,
       units: onboardUnits,
-      plan: onboardPlan,
       firstFarmName: onboardFarmName || `${user?.name}'s Farm`
     });
-    
-    if (res.success) {
+
+    if (!res.success) {
+      setAuthError(res.error || 'Onboarding saving failed');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (onboardPlan === 'Free') {
       await refreshAll();
       setActiveTab('dashboard');
       pushWorkspaceUrl('/dashboard');
-    } else {
-      setAuthError(res.error || 'Onboarding saving failed');
+      setIsSubmitting(false);
+      return;
     }
+
+    // Pro/Enterprise: hand off to Stripe Checkout. The webhook upgrades the
+    // plan once payment succeeds and the user lands back on ?checkout=success.
+    const checkout = await startCheckout(onboardPlan);
+    if (checkout.success && checkout.url) {
+      window.location.href = checkout.url;
+      return;
+    }
+    setAuthError(checkout.error || 'Could not start checkout. Please try again.');
     setIsSubmitting(false);
   };
 
@@ -987,7 +1020,6 @@ function DashboardContent() {
           name: settingsName.trim(),
           location: settingsLocation.trim(),
           units: settingsUnits,
-          plan: settingsPlan,
           accountType: settingsAccountType,
           avatarUrl: settingsAvatarUrl || undefined
         })
@@ -1004,6 +1036,52 @@ function DashboardContent() {
     } finally {
       setSettingsSaving(false);
     }
+  };
+
+  // Billing: plan tier is no longer client-writable (see handleSaveSettings
+  // above) — Pro/Enterprise are only granted by the Stripe webhook after a
+  // real payment. These handlers hand off to Stripe-hosted pages.
+  const [billingSubscription, setBillingSubscription] = useState<{
+    plan: 'Free' | 'Pro' | 'Enterprise';
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+  } | null>(null);
+  const [billingActionLoading, setBillingActionLoading] = useState(false);
+  const [billingError, setBillingError] = useState('');
+
+  useEffect(() => {
+    if (!user || activeTab !== 'settings') return;
+    fetch('/api/billing/subscription')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setBillingSubscription(data.subscription);
+      })
+      .catch((error) => console.error('Failed to load subscription:', error));
+  }, [user, activeTab]);
+
+  const handleUpgrade = async (plan: 'Pro' | 'Enterprise') => {
+    setBillingError('');
+    setBillingActionLoading(true);
+    const res = await startCheckout(plan);
+    if (res.success && res.url) {
+      window.location.href = res.url;
+      return;
+    }
+    setBillingError(res.error || 'Could not start checkout. Please try again.');
+    setBillingActionLoading(false);
+  };
+
+  const handleManageBilling = async () => {
+    setBillingError('');
+    setBillingActionLoading(true);
+    const res = await openBillingPortal();
+    if (res.success && res.url) {
+      window.location.href = res.url;
+      return;
+    }
+    setBillingError(res.error || 'Could not open the billing portal. Please try again.');
+    setBillingActionLoading(false);
   };
 
   // Loading spinner while the session is being resolved on first load
@@ -1036,6 +1114,12 @@ function DashboardContent() {
             <Sparkles className="h-4 w-4" />
             <span>Farm Dashboard Onboarding — Step {onboardStep} of 2</span>
           </div>
+
+          {authError && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              {authError}
+            </div>
+          )}
 
           {onboardStep === 1 ? (
             <div>
@@ -1156,7 +1240,7 @@ function DashboardContent() {
                 >
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
                     <>
-                      <span>Complete Onboarding</span>
+                      <span>{onboardPlan === 'Free' ? 'Complete Onboarding' : `Continue to Payment — ${onboardPlan}`}</span>
                       <Check className="h-4 w-4" />
                     </>
                   )}
@@ -2388,7 +2472,6 @@ function DashboardContent() {
                 settingsName={settingsName}
                 settingsLocation={settingsLocation}
                 settingsUnits={settingsUnits}
-                settingsPlan={settingsPlan}
                 settingsAccountType={settingsAccountType}
                 settingsAvatarUrl={settingsAvatarUrl}
                 settingsError={settingsError}
@@ -2397,118 +2480,15 @@ function DashboardContent() {
                 onNameChange={setSettingsName}
                 onLocationChange={setSettingsLocation}
                 onUnitsChange={setSettingsUnits}
-                onPlanChange={setSettingsPlan}
                 onAccountTypeChange={setSettingsAccountType}
                 onAvatarChange={setSettingsAvatarUrl}
                 onSubmit={handleSaveSettings}
+                billingSubscription={billingSubscription}
+                billingActionLoading={billingActionLoading}
+                billingError={billingError}
+                onUpgradePlan={handleUpgrade}
+                onManageBilling={handleManageBilling}
               />
-            )}
-            {false && activeTab === 'settings' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="max-w-xl mx-auto bg-white border border-stone-200 rounded-3xl p-8 shadow-sm space-y-6"
-              >
-                <div>
-                  <h1 className="text-xl font-semibold tracking-tight text-stone-900">Profile & Configuration Settings</h1>
-                  <p className="text-sm text-stone-500 mt-1">Manage physical settings and subscription quotas.</p>
-                </div>
-
-                {settingsError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
-                    {settingsError}
-                  </div>
-                )}
-
-                {settingsSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
-                    {settingsSuccess}
-                  </div>
-                )}
-
-                <form onSubmit={handleSaveSettings} className="space-y-4 font-sans">
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Display Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={settingsName}
-                      onChange={(e) => setSettingsName(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Operation Location</label>
-                    <input
-                      type="text"
-                      required
-                      value={settingsLocation}
-                      onChange={(e) => setSettingsLocation(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Measurement System</label>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setSettingsUnits('metric')}
-                        className={`py-2 rounded-xl border text-xs font-semibold font-mono cursor-pointer transition-all ${settingsUnits === 'metric' ? 'border-emerald-600 bg-emerald-50/30 text-emerald-950' : 'border-stone-200 bg-white text-stone-600'}`}
-                      >
-                        Metric (┬░C, km/h)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSettingsUnits('imperial')}
-                        className={`py-2 rounded-xl border text-xs font-semibold font-mono cursor-pointer transition-all ${settingsUnits === 'imperial' ? 'border-emerald-600 bg-emerald-50/30 text-emerald-950' : 'border-stone-200 bg-white text-stone-600'}`}
-                      >
-                        Imperial (┬░F, mph)
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Quota Plan Tier</label>
-                    <select
-                      value={settingsPlan}
-                      onChange={(e: any) => setSettingsPlan(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    >
-                      <option value="Free">Free Account Plan</option>
-                      <option value="Pro">Pro Pathologist Plan ($29/mo)</option>
-                      <option value="Enterprise">Enterprise Operations ($149/mo)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 uppercase tracking-wider font-mono">Operation Type</label>
-                    <select
-                      value={settingsAccountType}
-                      onChange={(e: any) => setSettingsAccountType(e.target.value)}
-                      className="mt-1 block w-full px-4 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    >
-                      <option value="Gardener">≡اî▒ Home / Hobbyist Gardener</option>
-                      <option value="Farmer">≡اأ£ Commercial Farmer</option>
-                      <option value="Nursery">≡اî┐ Farm Dashboard / Nursery Operator</option>
-                    </select>
-                    {settingsAccountType !== user.accountType && (
-                      <p className="text-[11px] text-amber-600 mt-1.5">
-                        Switching roles changes your dashboard layout and navigation. Any data tied to your current role (e.g. inventory, expenses) stays intact and reappears if you switch back ظ¤ nothing is deleted.
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wider transition-all shadow-sm cursor-pointer"
-                  >
-                    Save & Sync Settings
-                  </button>
-                </form>
-              </motion.div>
             )}
           </AnimatePresence>
       </DashboardShell>
