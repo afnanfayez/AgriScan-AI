@@ -1459,6 +1459,25 @@ async function seedAgribusiness(userId, userEmail, userName) {
     });
   }
 
+  // ── Field scan (Maize division — Fall Armyworm batch, feeds Cross-Farm Analytics) ──
+  await supabase.from('field_scans').insert({
+    user_id: userId, farm_id: farmId1,
+    total_samples: 10, healthy_count: 4, infection_percentage: 60,
+    results: [
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 92, severity: 'High', symptoms: 'Window-pane feeding, ragged whorl damage, frass in leaf axils — Block S3 rows 4-7.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 89, severity: 'High', symptoms: 'Larvae visible in whorl, elongated feeding galleries on upper leaves.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 84, severity: 'Medium', symptoms: 'Early window-pane lesions, low larval density.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 80, severity: 'Medium', symptoms: 'Scattered leaf perforation, rows 5-6.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 76, severity: 'Medium', symptoms: 'Minor frass deposits, isolated to a few plants.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Fall Armyworm (Spodoptera frugiperda)', confidence: 71, severity: 'Low', symptoms: 'Trace feeding marks, likely early instar.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 95, severity: 'Low', symptoms: 'Uniform tasseling stand, no larval damage — Block N1.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 93, severity: 'Low', symptoms: 'No pest pressure observed.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 91, severity: 'Low', symptoms: 'Good canopy color, no feeding damage.' },
+      { imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop', diagnosis: 'Healthy', confidence: 96, severity: 'Low', symptoms: 'Clean whorls across sample rows.' },
+    ],
+    created_at: daysAgo(3),
+  });
+
   // ── Organization (links Maize commercial division + Eldoret nursery) ────────
   console.log('  [Agribusiness] Adding organization, org members, API key, audit reports...');
   const { data: org, error: orgErr } = await supabase.from('organizations').insert({
