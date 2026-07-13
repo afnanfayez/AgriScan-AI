@@ -14,6 +14,15 @@ const severityTone: Record<ScanResultItem['severity'], BadgeTone> = {
   High: 'danger',
 };
 
+// Healthy diagnoses render green regardless of the Low/Medium/High severity
+// scale, so the heatmap reads as "affected vs not" rather than always-amber.
+function zoneColor(result: ScanResultItem): string {
+  if (result.diagnosis === 'Healthy') return 'bg-emerald-500';
+  if (result.severity === 'High') return 'bg-red-500';
+  if (result.severity === 'Medium') return 'bg-amber-500';
+  return 'bg-emerald-400';
+}
+
 interface FarmerBatchScanSectionProps {
   farms: FarmField[];
   onScanComplete?: () => void;
@@ -201,7 +210,23 @@ export default function FarmerBatchScanSection({ farms, onScanComplete }: Farmer
             title="Batch Results"
             subtitle={`${fieldScan.healthyCount} of ${fieldScan.totalSamples} samples healthy - ${healthyPct}% healthy (${fieldScan.infectionPercentage}% infection rate)`}
           />
-          <CardBody>
+          <CardBody className="space-y-5">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-slate-400">
+                Field Health Heatmap — one cell per sampled zone
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {fieldScan.results.map((result, index) => (
+                  <div
+                    key={index}
+                    title={`Zone ${index + 1}: ${result.diagnosis} (${result.severity})`}
+                    className={`flex h-9 w-9 items-center justify-center rounded-md text-[10px] font-semibold text-white ${zoneColor(result)}`}
+                  >
+                    {index + 1}
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {fieldScan.results.map((result, index) => (
                 <div key={index} className="overflow-hidden rounded-2xl border border-stone-200 dark:border-slate-800">
