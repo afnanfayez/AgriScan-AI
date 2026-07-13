@@ -68,6 +68,7 @@ export const ROLE_CONFIG: Record<AccountType, RoleConfig> = {
       { id: 'grading', label: 'Quality Grading', icon: ShieldCheck },
       { id: 'orders', label: 'Orders & Dispatch', icon: Truck },
       { id: 'reports', label: 'Loss & Turnover Reports', icon: ChartPie },
+      { id: 'community', label: 'Community', icon: Users },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
     overviewTitle: 'Inventory Overview',
