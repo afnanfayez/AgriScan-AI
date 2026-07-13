@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, ChevronRight, CloudSun, FileDown, Loader2, Map, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ChevronRight, CloudSun, Droplets, FileDown, Loader2, Map, ShieldCheck } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { StatCard, StatCardGrid } from '@/components/ui/stat-card';
@@ -23,6 +23,14 @@ const statusTone: Record<FieldStatus, BadgeTone> = {
   Warning: 'warning',
   Critical: 'danger',
 };
+
+// Late blight (the disease this app's demo data centers on) targets Solanaceae
+// crops - flag fields growing them when the forecast turns humid.
+const BLIGHT_SUSCEPTIBLE_CROP_PATTERN = /tomato|potato/i;
+
+function isBlightSusceptible(cropType?: string): boolean {
+  return !!cropType && BLIGHT_SUSCEPTIBLE_CROP_PATTERN.test(cropType);
+}
 
 interface FarmerOverviewSectionProps {
   user: any;
@@ -93,6 +101,14 @@ export default function FarmerOverviewSection({ user, farms, plants, onViewField
     .filter((f) => f.status === 'Warning' || f.status === 'Critical')
     .sort((a, b) => (a.status === b.status ? 0 : a.status === 'Critical' ? -1 : 1))
     .map((f) => ({ id: f.farm.id, name: f.farm.name, cropType: f.farm.cropType || 'Unspecified', status: f.status }));
+
+  // Weather-based risk alert: surface an upcoming humid/high-blight-risk day
+  // against fields growing blight-susceptible crops, so the risk is tied to
+  // specific fields rather than just a generic regional badge.
+  const susceptibleFields = farms.filter((f) => isBlightSusceptible(f.cropType));
+  const riskyForecastDay = weatherData?.forecast?.find((d: { sporeIndex: number }) => d.sporeIndex >= 6);
+  const showWeatherRiskAlert =
+    !!weatherData && susceptibleFields.length > 0 && (weatherData.current.blightRisk !== 'Low' || !!riskyForecastDay);
 
   const columns: TableColumn<AttentionRow>[] = [
     { key: 'name', header: 'Field' },
@@ -191,6 +207,25 @@ export default function FarmerOverviewSection({ user, farms, plants, onViewField
           )}
         </CardBody>
       </Card>
+
+      {showWeatherRiskAlert && (
+        <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900/30 dark:bg-amber-950/20">
+          <CardBody className="flex items-start gap-3">
+            <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
+              <Droplets className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Weather-Based Risk Alert</p>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                {riskyForecastDay
+                  ? `Upcoming high humidity (${riskyForecastDay.day}, ${riskyForecastDay.humidity}%) increases fungal blight risk for `
+                  : `Current conditions (${weatherData.current.blightRisk} blight risk) increase fungal disease pressure for `}
+                {susceptibleFields.map((f) => f.name).join(', ')}. Consider a preventive fungicide pass or a follow-up scan.
+              </p>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Fields Needing Attention" subtitle="Warning and critical fields, sorted worst-first." />
