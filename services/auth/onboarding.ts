@@ -11,7 +11,6 @@ export interface OnboardInput {
   accountType?: AccountType;
   location?: string;
   units?: string;
-  plan?: string;
   firstFarmName?: string;
   avatarUrl?: string;
 }
@@ -32,17 +31,19 @@ export async function onboardUser(
   user: SupabaseUserProfile,
   input: OnboardInput
 ): Promise<OnboardResult> {
-  const { name, accountType, location, units, plan, firstFarmName, avatarUrl } = input;
+  const { name, accountType, location, units, firstFarmName, avatarUrl } = input;
   const nextName = typeof name === 'string' ? name.trim() : undefined;
   const nextAvatarUrl = typeof avatarUrl === 'string' ? avatarUrl.trim() : undefined;
 
-  // Update user properties in public.profiles
+  // Update user properties in public.profiles. `plan` is deliberately not
+  // accepted here — it can only be changed by the Stripe webhook handler
+  // (services/billing-service.ts:syncSubscriptionFromStripe), so a client
+  // can never self-grant a paid plan through this endpoint.
   const updateData: any = {};
   if (nextName) updateData.name = nextName;
   if (accountType) updateData.account_type = accountType;
   if (location !== undefined) updateData.location = location;
   if (units) updateData.units = units;
-  if (plan) updateData.plan = plan;
   if (nextAvatarUrl) {
     if (nextAvatarUrl.startsWith('data:image/')) {
       const uploadedAvatarUrl = await uploadImageToStorage(
