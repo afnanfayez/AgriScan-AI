@@ -3,6 +3,7 @@ import type { SupabaseUserProfile } from '@/lib/auth';
 import type { BatchScan } from '@/types/domain';
 import { ServiceError } from './errors';
 import { runGeminiBatchAnalysis } from './gemini-batch-analysis';
+import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -66,10 +67,13 @@ export async function createBatchScan(
     throw new ServiceError('Batch not found or unauthorized', 404);
   }
 
+  await assertWithinQuota(supabase, user, images.length);
+
   const { totalSamples, healthyCount, infectionPercentage, results } = await runGeminiBatchAnalysis(
     images,
     { plantType: batch.plant_type },
-    `batch-scans/${user.id}`
+    `batch-scans/${user.id}`,
+    user.plan
   );
 
   const { data: newBatchScan, error: insertError } = await supabase
@@ -89,6 +93,8 @@ export async function createBatchScan(
     console.error('Error inserting batch scan:', insertError);
     throw new ServiceError(insertError?.message || 'Failed to save batch scan', 400);
   }
+
+  await recordUsage(supabase, user, 'batch_scan', totalSamples);
 
   // Apply the screening result to the whole batch's sellability status
   if (infectionPercentage > 25) {

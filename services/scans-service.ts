@@ -5,6 +5,7 @@ import type { PlantScan, TreatmentPlan } from '@/types/domain';
 import { mapTreatment } from './treatments-service';
 import { ServiceError } from './errors';
 import { runGeminiPlantAnalysis } from './gemini-analysis';
+import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -60,10 +61,13 @@ export async function analyzeScan(
     throw new ServiceError('Plant not found or unauthorized', 404);
   }
 
-  const { diagnosis, confidence, severity, symptoms, organicSteps, chemicalSteps } = await runGeminiPlantAnalysis(image, {
-    plantName: plant.name,
-    plantType: plant.type,
-  });
+  await assertWithinQuota(supabase, user);
+
+  const { diagnosis, confidence, severity, symptoms, organicSteps, chemicalSteps } = await runGeminiPlantAnalysis(
+    image,
+    { plantName: plant.name, plantType: plant.type },
+    user.plan
+  );
 
   // Upload plant inspection photo to Supabase Storage
   const mimeType = image.startsWith('data:') ? (image.match(/data:(.*?);/)?.[1] || 'image/jpeg') : 'image/jpeg';
@@ -90,6 +94,8 @@ export async function analyzeScan(
     console.error('Error inserting scan:', scanError);
     throw new ServiceError(scanError?.message || 'Failed to save scan record', 400);
   }
+
+  await recordUsage(supabase, user, 'scan');
 
   // Save treatment plan to Supabase treatments table
   const { data: newTreatment, error: treatmentError } = await supabase

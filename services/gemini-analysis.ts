@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { ServiceError } from './errors';
+import { PLAN_LIMITS, type Plan } from './plan-service';
 
 export interface GeminiAnalysisResult {
   diagnosis: string;
@@ -41,7 +42,8 @@ function isGeminiQuotaError(error: any): boolean {
  */
 export async function runGeminiPlantAnalysis(
   image: string,
-  context: { plantName?: string; plantType?: string } = {}
+  context: { plantName?: string; plantType?: string } = {},
+  plan: Plan = 'Free'
 ): Promise<GeminiAnalysisResult> {
   let base64Data = '';
   let mimeType = 'image/jpeg';
@@ -141,11 +143,7 @@ export async function runGeminiPlantAnalysis(
 
     const models = Array.from(new Set([
       process.env.GEMINI_MODEL,
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-2.0-flash-lite',
-      'gemini-2.0-flash',
+      ...PLAN_LIMITS[plan].modelChain,
     ].filter(Boolean))) as string[];
 
     let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;

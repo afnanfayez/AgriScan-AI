@@ -2,6 +2,7 @@ import { uploadImageToStorage } from '@/lib/supabase';
 import type { ScanResultItem } from '@/types/domain';
 import { runGeminiPlantAnalysis } from './gemini-analysis';
 import { ServiceError } from './errors';
+import type { Plan } from './plan-service';
 
 export interface BatchAnalysisResult {
   totalSamples: number;
@@ -21,7 +22,8 @@ export interface BatchAnalysisResult {
 export async function runGeminiBatchAnalysis(
   images: string[],
   context: { plantName?: string; plantType?: string } = {},
-  storagePathPrefix: string = 'batch-scans'
+  storagePathPrefix: string = 'batch-scans',
+  plan: Plan = 'Free'
 ): Promise<BatchAnalysisResult> {
   const results: ScanResultItem[] = [];
 
@@ -37,7 +39,7 @@ export async function runGeminiBatchAnalysis(
     }
 
     try {
-      const analysis = await runGeminiPlantAnalysis(image, context);
+      const analysis = await runGeminiPlantAnalysis(image, context, plan);
       results.push({
         imageUrl,
         diagnosis: analysis.diagnosis,

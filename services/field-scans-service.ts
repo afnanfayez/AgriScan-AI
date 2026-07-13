@@ -4,6 +4,7 @@ import type { FieldScan, ScanResultItem } from '@/types/domain';
 import { hasCropType, parseCropTypes } from '@/lib/crop-types';
 import { ServiceError } from './errors';
 import { runGeminiBatchAnalysis } from './gemini-batch-analysis';
+import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -130,10 +131,13 @@ export async function createFieldScan(
     throw new ServiceError('Selected crop type is not registered for this field.', 400);
   }
 
+  await assertWithinQuota(supabase, user, images.length);
+
   const { totalSamples, healthyCount, infectionPercentage, results } = await runGeminiBatchAnalysis(
     images,
     { plantName: farm.name, plantType: selectedCropType || farm.crop_type },
-    `field-scans/${user.id}`
+    `field-scans/${user.id}`,
+    user.plan
   );
   const scanResults = results.map((result) => ({
     ...result,
@@ -157,6 +161,8 @@ export async function createFieldScan(
     console.error('Error inserting field scan:', insertError);
     throw new ServiceError(insertError?.message || 'Failed to save field scan', 400);
   }
+
+  await recordUsage(supabase, user, 'field_scan', totalSamples);
 
   await createFieldHealthAlerts(supabase, user, farm, scanResults, selectedCropType);
 
