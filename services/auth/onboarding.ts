@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { uploadImageToStorage } from '@/lib/supabase';
 import type { SupabaseUserProfile } from '@/lib/auth';
 import type { AccountType } from '@/types/domain';
 import { ServiceError } from '../errors';
@@ -12,6 +13,7 @@ export interface OnboardInput {
   units?: string;
   plan?: string;
   firstFarmName?: string;
+  avatarUrl?: string;
 }
 
 export interface OnboardResult {
@@ -30,8 +32,9 @@ export async function onboardUser(
   user: SupabaseUserProfile,
   input: OnboardInput
 ): Promise<OnboardResult> {
-  const { name, accountType, location, units, plan, firstFarmName } = input;
+  const { name, accountType, location, units, plan, firstFarmName, avatarUrl } = input;
   const nextName = typeof name === 'string' ? name.trim() : undefined;
+  const nextAvatarUrl = typeof avatarUrl === 'string' ? avatarUrl.trim() : undefined;
 
   // Update user properties in public.profiles
   const updateData: any = {};
@@ -40,6 +43,25 @@ export async function onboardUser(
   if (location !== undefined) updateData.location = location;
   if (units) updateData.units = units;
   if (plan) updateData.plan = plan;
+  if (nextAvatarUrl) {
+    if (nextAvatarUrl.startsWith('data:image/')) {
+      const uploadedAvatarUrl = await uploadImageToStorage(
+        nextAvatarUrl,
+        `avatars/${user.id}/${Date.now()}.jpg`,
+        'agriscan'
+      );
+
+      if (!uploadedAvatarUrl) {
+        throw new ServiceError('Profile image could not be uploaded. Please try another image.', 400);
+      }
+
+      updateData.avatar_url = uploadedAvatarUrl;
+    } else if (/^https?:\/\//i.test(nextAvatarUrl)) {
+      updateData.avatar_url = nextAvatarUrl;
+    } else {
+      throw new ServiceError('Profile image format is not supported.', 400);
+    }
+  }
 
   const { data: profile, error: updateError } = await supabase
     .from('profiles')

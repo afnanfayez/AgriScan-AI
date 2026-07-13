@@ -11,10 +11,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, accountType, location, units, plan, firstFarmName } = await req.json();
+    const { name, accountType, location, units, plan, firstFarmName, avatarUrl } = await req.json();
 
     const supabase = await createClient();
-    const result = await onboardUser(supabase, user, { name, accountType, location, units, plan, firstFarmName });
+    const result = await onboardUser(supabase, user, { name, accountType, location, units, plan, firstFarmName, avatarUrl });
 
     return NextResponse.json({
       success: true,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Loader2, Plus, User } from 'lucide-react';
+import { ArrowRight, CalendarClock, Loader2, MapPin, Plus, User } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import type { FarmField, FarmTask } from '@/types/domain';
@@ -194,23 +194,31 @@ export default function FarmerLaborSection({ farms }: FarmerLaborSectionProps) {
                     <p className="py-6 text-center text-sm text-stone-400 dark:text-slate-500">No tasks here.</p>
                   ) : (
                     colTasks.map((task) => (
-                      <div key={task.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-                        <h4 className="text-sm font-semibold text-stone-900 dark:text-slate-50">{task.title}</h4>
-                        {task.description && <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">{task.description}</p>}
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-stone-500 dark:text-slate-400">
-                          <span>{farmName(task.farmId)}</span>
+                      <div key={task.id} className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                        <div className="space-y-2">
+                          <h4 className="break-words text-sm font-semibold leading-5 text-stone-900 dark:text-slate-50">{task.title}</h4>
+                          {task.description && <p className="break-words text-xs leading-5 text-stone-500 dark:text-slate-400">{task.description}</p>}
+                          <div className="flex items-start gap-2 text-xs text-stone-600 dark:text-slate-300">
+                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <span className="min-w-0 break-words">{farmName(task.farmId)}</span>
+                          </div>
                           {task.assigneeEmail && (
-                            <span className="inline-flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {task.assigneeEmail}
-                            </span>
+                            <div className="flex items-start gap-2 text-xs text-stone-600 dark:text-slate-300">
+                              <User className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <span className="min-w-0 break-all">{task.assigneeEmail}</span>
+                            </div>
                           )}
-                          {task.dueDate && <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>}
+                          {task.dueDate && (
+                            <div className="flex items-start gap-2 text-xs text-stone-600 dark:text-slate-300">
+                              <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>
+                            </div>
+                          )}
                         </div>
                         {NEXT_STATUS[task.status] && (
                           <button
                             onClick={() => advanceTask(task)}
-                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                            className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
                           >
                             {NEXT_LABEL[task.status]}
                             <ArrowRight className="h-3 w-3" />

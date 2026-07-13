@@ -52,6 +52,7 @@ export const ROLE_CONFIG: Record<AccountType, RoleConfig> = {
       { id: 'analytics', label: 'Yield & Risk Analytics', icon: ChartLine },
       { id: 'irrigation', label: 'Irrigation & Inputs', icon: Droplets },
       { id: 'labor', label: 'Labor/Tasks', icon: ClipboardList },
+      { id: 'community', label: 'Community', icon: Users },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
     overviewTitle: 'Farm Operations Overview',

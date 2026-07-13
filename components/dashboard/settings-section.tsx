@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, CheckCircle, Loader2, MapPin, Settings, Sliders, Sparkles, User } from 'lucide-react';
+import { AlertTriangle, Building2, Camera, CheckCircle, Loader2, MapPin, Settings, Sliders, Sparkles, User, X } from 'lucide-react';
 
 type Units = 'metric' | 'imperial';
 type Plan = 'Free' | 'Pro' | 'Enterprise';
@@ -16,6 +16,7 @@ interface SettingsSectionProps {
   settingsUnits: Units;
   settingsPlan: Plan;
   settingsAccountType: AccountType;
+  settingsAvatarUrl: string;
   settingsError: string;
   settingsSuccess: string;
   settingsSaving: boolean;
@@ -24,6 +25,7 @@ interface SettingsSectionProps {
   onUnitsChange: (value: Units) => void;
   onPlanChange: (value: Plan) => void;
   onAccountTypeChange: (value: AccountType) => void;
+  onAvatarChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
 }
 
@@ -108,7 +110,7 @@ function OrganizationSettingsCard() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={!orgId}
-              className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+              className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
             />
           </label>
           <button
@@ -145,6 +147,7 @@ export default function SettingsSection({
   settingsUnits,
   settingsPlan,
   settingsAccountType,
+  settingsAvatarUrl,
   settingsError,
   settingsSuccess,
   settingsSaving,
@@ -153,8 +156,23 @@ export default function SettingsSection({
   onUnitsChange,
   onPlanChange,
   onAccountTypeChange,
+  onAvatarChange,
   onSubmit,
 }: SettingsSectionProps) {
+  const handleAvatarFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => onAvatarChange(reader.result as string);
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -190,6 +208,42 @@ export default function SettingsSection({
 
       <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <div className="mb-6 flex flex-col gap-4 rounded-xl border border-stone-100 bg-stone-50 p-4 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center">
+            <img
+              src={settingsAvatarUrl || user.avatarUrl}
+              alt={settingsName || user.name}
+              className="h-20 w-20 shrink-0 rounded-full border border-stone-200 bg-white object-cover dark:border-slate-700 dark:bg-slate-900"
+              onError={(event) => {
+                const img = event.target as HTMLImageElement;
+                img.onerror = null;
+                img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23d1fae5' rx='40'/%3E%3Ccircle cx='40' cy='30' r='13' fill='%23059669'/%3E%3Cellipse cx='40' cy='66' rx='23' ry='18' fill='%23059669'/%3E%3C/svg%3E";
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-stone-950 dark:text-slate-50">Profile Photo</p>
+              <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-slate-400">
+                This image is saved to your profile and shown in the dashboard header for every role.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+                  <Camera className="h-4 w-4" />
+                  <span>Upload Photo</span>
+                  <input type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
+                </label>
+                {settingsAvatarUrl && settingsAvatarUrl !== user.avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => onAvatarChange(user.avatarUrl || '')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 transition hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <X className="h-4 w-4" />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
               <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
@@ -201,7 +255,7 @@ export default function SettingsSection({
                 required
                 value={settingsName}
                 onChange={(event) => onNameChange(event.target.value)}
-                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-950"
+                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
               />
             </label>
 
@@ -215,7 +269,7 @@ export default function SettingsSection({
                 required
                 value={settingsLocation}
                 onChange={(event) => onLocationChange(event.target.value)}
-                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-950"
+                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
               />
             </label>
           </div>
@@ -237,7 +291,7 @@ export default function SettingsSection({
                   className={`rounded-xl border p-4 text-left transition ${
                     settingsUnits === option.value
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-sm dark:border-emerald-400/60 dark:bg-emerald-500/10 dark:text-emerald-100'
-                      : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300 hover:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-100'
+                      : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300 hover:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:bg-slate-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <span className="block text-sm font-bold">{option.title}</span>
@@ -256,7 +310,7 @@ export default function SettingsSection({
               <select
                 value={settingsPlan}
                 onChange={(event) => onPlanChange(event.target.value as Plan)}
-                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
               >
                 {plans.map((plan) => (
                   <option key={plan} value={plan}>
@@ -274,7 +328,7 @@ export default function SettingsSection({
               <select
                 value={settingsAccountType}
                 onChange={(event) => onAccountTypeChange(event.target.value as AccountType)}
-                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                className="mt-2 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-950 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
               >
                 {accountTypes.map((type) => (
                   <option key={type.value} value={type.value}>
