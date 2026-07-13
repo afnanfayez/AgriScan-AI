@@ -34,10 +34,18 @@ const DEFAULT_PALETTE: { light: string; dark: string }[] = [
   { light: '#a855f7', dark: '#a855f7' }, // violet
 ];
 
+// NOTE: these must be literal, fully-written-out class strings (not built via
+// .map()/template-literal interpolation over DEFAULT_PALETTE) — Tailwind's
+// static scanner can't see dynamically-constructed arbitrary-value classes,
+// so a generated version of this constant silently produces undefined
+// --chart-* vars and every default (non-explicit-color) series/segment falls
+// back to the browser's default black fill/stroke.
 const CHART_VARS_CLASSNAME = cn(
-  DEFAULT_PALETTE.map(
-    (c, i) => `[--chart-c${i + 1}:${c.light}] dark:[--chart-c${i + 1}:${c.dark}]`
-  ).join(' '),
+  '[--chart-c1:#10b981] dark:[--chart-c1:#059669]',
+  '[--chart-c2:#3b82f6] dark:[--chart-c2:#3b82f6]',
+  '[--chart-c3:#f59e0b] dark:[--chart-c3:#d97706]',
+  '[--chart-c4:#ef4444] dark:[--chart-c4:#ef4444]',
+  '[--chart-c5:#a855f7] dark:[--chart-c5:#a855f7]',
   '[--chart-grid:#e7e5e4] dark:[--chart-grid:#1e293b]',
   '[--chart-axis:#a8a29e] dark:[--chart-axis:#64748b]',
   '[--chart-tooltip-bg:#ffffff] dark:[--chart-tooltip-bg:#0f172a]',
