@@ -144,7 +144,7 @@ export default function NurseryGradingSection() {
         <select
           value={gradeFilter}
           onChange={(e) => setGradeFilter(e.target.value)}
-          className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:w-auto"
         >
           <option value="">All Grades</option>
           {GRADES.map((g) => (
@@ -173,7 +173,7 @@ export default function NurseryGradingSection() {
 
           <Card>
             <CardBody className="p-0">
-              <div className="p-5">
+              <div className="p-3 sm:p-5">
                 <Table<InventoryBatch>
                   columns={columns}
                   rows={filteredBatches}

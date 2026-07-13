@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Award, Loader2, ShieldCheck, ShieldX } from 'lucide-react';
+import { Award, FileDown, Loader2, ShieldCheck, ShieldX } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 
@@ -101,6 +101,18 @@ export default function PublicCertificatePage() {
                   <span className="mt-1 block font-semibold text-stone-900 dark:text-slate-50">{certificate.status}</span>
                 </div>
               </div>
+
+              {certificate.certificateUrl && (
+                <a
+                  href={certificate.certificateUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Download Certificate PDF
+                </a>
+              )}
 
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex items-center gap-2">

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Loader2, Plus, Trash, Truck } from 'lucide-react';
+import { FileCheck, Link2, Loader2, Plus, Trash, Truck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -43,6 +43,7 @@ export default function NurseryOrdersSection() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+  const [generatingCertificateIds, setGeneratingCertificateIds] = useState<Set<string>>(new Set());
   const [origin, setOrigin] = useState('');
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function NurseryOrdersSection() {
     const batch = batches.find((b) => b.id === batchId);
     return batch ? (batch.batchName || batch.plantType) : 'Unknown batch';
   };
+  const batchById = useMemo(() => new Map(batches.map((batch) => [batch.id, batch])), [batches]);
 
   const fetchOrders = () => {
     setIsLoading(true);
@@ -144,6 +146,29 @@ export default function NurseryOrdersSection() {
     }
   };
 
+  const generateBatchCertificate = async (batchId: string) => {
+    setGeneratingCertificateIds((prev) => new Set(prev).add(batchId));
+    try {
+      const res = await fetch(`/api/inventory-batches/${encodeURIComponent(batchId)}/certificate`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBatches((prev) => prev.map((batch) => (
+          batch.id === batchId ? { ...batch, certificateUrl: data.certificateUrl } : batch
+        )));
+      }
+    } catch (err) {
+      console.error('Failed to generate certificate:', err);
+    } finally {
+      setGeneratingCertificateIds((prev) => {
+        const next = new Set(prev);
+        next.delete(batchId);
+        return next;
+      });
+    }
+  };
+
   const columns: TableColumn<OrderWithItems>[] = [
     { key: 'customerName', header: 'Customer', render: (row) => row.customerName },
     {
@@ -166,9 +191,71 @@ export default function NurseryOrdersSection() {
       key: 'certificate',
       header: 'Certificate QR',
       render: (row) => {
-        const primaryBatchId = row.items[0]?.batchId;
-        if (!primaryBatchId || !origin) return <span className="text-xs text-stone-400">-</span>;
-        return <QRCodeSVG value={`${origin}/certificate/${primaryBatchId}`} size={48} />;
+        const batchIds = Array.from(new Set(row.items.map((item) => item.batchId).filter((id): id is string => !!id)));
+        if (batchIds.length === 0 || !origin) return <span className="text-xs text-stone-400">-</span>;
+
+        return (
+          <div className="flex w-full flex-col gap-2 sm:min-w-[11rem]">
+            {batchIds.slice(0, 2).map((batchId) => {
+              const batch = batchById.get(batchId);
+              const publicUrl = `${origin}/certificate/${batchId}`;
+              const isGenerating = generatingCertificateIds.has(batchId);
+
+              return (
+                <div key={batchId} className="flex min-w-0 items-center gap-2 rounded-xl border border-stone-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950/60">
+                  <QRCodeSVG value={publicUrl} size={46} />
+                  <div className="min-w-0">
+                    <p className="max-w-[7rem] truncate text-[11px] font-semibold text-stone-700 dark:text-slate-200">
+                      {batchName(batchId)}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <a
+                        href={publicUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-1 text-[10px] font-bold text-stone-700 hover:bg-stone-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        <Link2 className="h-3 w-3" />
+                        Open
+                      </a>
+                      {batch?.certificateUrl ? (
+                        <a
+                          href={batch.certificateUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-1 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        >
+                          <FileCheck className="h-3 w-3" />
+                          PDF
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            generateBatchCertificate(batchId);
+                          }}
+                          disabled={isGenerating}
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCheck className="h-3 w-3" />}
+                          Generate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {batchIds.length > 2 && (
+              <span className="text-[10px] font-semibold text-stone-400 dark:text-slate-500">
+                +{batchIds.length - 2} more batch{batchIds.length - 2 === 1 ? '' : 'es'}
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -207,11 +294,11 @@ export default function NurseryOrdersSection() {
           <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50">Orders & Dispatch</h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">Track customer orders and dispatch status with certificate lookups.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-[minmax(160px,1fr)_auto]">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="min-w-0 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           >
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
@@ -221,7 +308,7 @@ export default function NurseryOrdersSection() {
           </select>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
           >
             <Plus className="h-4 w-4" />
             New Order
@@ -240,7 +327,7 @@ export default function NurseryOrdersSection() {
       ) : (
         <Card>
           <CardBody className="p-0">
-            <div className="p-5">
+            <div className="p-3 sm:p-5">
               <Table<OrderWithItems> columns={columns} rows={orders} emptyMessage="No orders recorded yet." />
             </div>
           </CardBody>
@@ -249,7 +336,7 @@ export default function NurseryOrdersSection() {
 
       <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="New Order">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 dark:text-slate-400">Customer Name</label>
               <input
@@ -278,17 +365,17 @@ export default function NurseryOrdersSection() {
               type="date"
               value={form.dispatchDate}
               onChange={(e) => setForm((f) => ({ ...f, dispatchDate: e.target.value }))}
-              className="mt-1 w-full max-w-xs rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:max-w-xs"
             />
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 dark:text-slate-400">Line Items</label>
               <button
                 type="button"
                 onClick={addLineItem}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 sm:border-0 sm:px-0 sm:py-0 dark:border-emerald-500/25 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Item
@@ -296,11 +383,11 @@ export default function NurseryOrdersSection() {
             </div>
             <div className="mt-2 space-y-2">
               {lineItems.map((item, index) => (
-                <div key={index} className="grid grid-cols-[1fr_5rem_6rem_auto] items-center gap-2">
+                <div key={index} className="grid gap-2 rounded-xl border border-stone-200 bg-stone-50 p-2 dark:border-slate-800 dark:bg-slate-950/40 sm:grid-cols-[minmax(0,1fr)_5rem_6rem_auto] sm:items-center sm:border-0 sm:bg-transparent sm:p-0 sm:dark:bg-transparent">
                   <select
                     value={item.batchId}
                     onChange={(e) => updateLineItem(index, { batchId: e.target.value })}
-                    className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="min-w-0 rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:bg-stone-50"
                   >
                     <option value="">Choose batch...</option>
                     {batches.map((batch) => (
@@ -313,7 +400,7 @@ export default function NurseryOrdersSection() {
                     placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
-                    className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:bg-stone-50"
                   />
                   <input
                     type="number"
@@ -322,13 +409,13 @@ export default function NurseryOrdersSection() {
                     placeholder="Price"
                     value={item.unitPrice}
                     onChange={(e) => updateLineItem(index, { unitPrice: e.target.value })}
-                    className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs text-stone-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:bg-stone-50"
                   />
                   <button
                     type="button"
                     onClick={() => removeLineItem(index)}
                     disabled={lineItems.length === 1}
-                    className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-red-600 disabled:opacity-30 dark:hover:bg-slate-800"
+                    className="inline-flex justify-center rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-red-600 disabled:opacity-30 dark:hover:bg-slate-800"
                   >
                     <Trash className="h-3.5 w-3.5" />
                   </button>
@@ -350,7 +437,7 @@ export default function NurseryOrdersSection() {
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={() => setShowCreateModal(false)}
@@ -361,7 +448,7 @@ export default function NurseryOrdersSection() {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-55"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-55"
             >
               {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Create Order
