@@ -63,6 +63,15 @@ declare module 'lucide-react' {
   export const ArrowRight: Icon;
   export const ShieldX: Icon;
   export const CalendarClock: Icon;
+  // Agribusiness (Enterprise Dashboard / Multi-Farm / Team / API keys / Compliance)
+  export const ArrowDownAZ: Icon;
+  export const ArrowUpAZ: Icon;
+  export const Copy: Icon;
+  export const CheckCircle2: Icon;
+  export const ChevronDown: Icon;
+  export const ChevronUp: Icon;
+  export const Link2: Icon;
+  export const Unlink: Icon;
   // Fallback for other icons if needed
   const icons: { [key: string]: Icon };
   export default icons;
