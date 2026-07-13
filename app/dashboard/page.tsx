@@ -20,6 +20,12 @@ import NurseryHealthScreeningSection from '@/components/dashboard/nursery-health
 import NurseryGradingSection from '@/components/dashboard/nursery-grading-section';
 import NurseryOrdersSection from '@/components/dashboard/nursery-orders-section';
 import NurseryReportsSection from '@/components/dashboard/nursery-reports-section';
+import AgribusinessOverviewSection from '@/components/dashboard/agribusiness-overview-section';
+import AgribusinessMultifarmSection from '@/components/dashboard/agribusiness-multifarm-section';
+import AgribusinessAnalyticsSection from '@/components/dashboard/agribusiness-analytics-section';
+import AgribusinessTeamSection from '@/components/dashboard/agribusiness-team-section';
+import AgribusinessApikeysSection from '@/components/dashboard/agribusiness-apikeys-section';
+import AgribusinessComplianceSection from '@/components/dashboard/agribusiness-compliance-section';
 
 // Leaflet touches `window` at module-load time, which crashes SSR — this route
 // is 'use client' but still gets server-rendered for the initial request.
@@ -1480,6 +1486,36 @@ function DashboardContent() {
             {/* 1d. INVENTORY OVERVIEW TAB (Nursery Operator) */}
             {activeTab === 'dashboard' && user.accountType === 'Nursery' && (
               <NurseryOverviewSection />
+            )}
+
+            {/* 1e. ENTERPRISE DASHBOARD TAB (Agribusiness Professional) */}
+            {activeTab === 'dashboard' && user.accountType === 'Agribusiness' && (
+              <AgribusinessOverviewSection farms={farms} plants={plants} />
+            )}
+
+            {/* 1f. MULTI-FARM MANAGER TAB (Agribusiness Professional) */}
+            {activeTab === 'multifarm' && user.accountType === 'Agribusiness' && (
+              <AgribusinessMultifarmSection farms={farms} plants={plants} />
+            )}
+
+            {/* 1g. CROSS-FARM ANALYTICS TAB (Agribusiness Professional) */}
+            {activeTab === 'analytics' && user.accountType === 'Agribusiness' && (
+              <AgribusinessAnalyticsSection />
+            )}
+
+            {/* 1h. TEAM & ROLES MANAGEMENT TAB (Agribusiness Professional) */}
+            {activeTab === 'team' && user.accountType === 'Agribusiness' && (
+              <AgribusinessTeamSection />
+            )}
+
+            {/* 1i. API & INTEGRATIONS TAB (Agribusiness Professional) */}
+            {activeTab === 'apikeys' && user.accountType === 'Agribusiness' && (
+              <AgribusinessApikeysSection />
+            )}
+
+            {/* 1j. COMPLIANCE & AUDIT REPORTS TAB (Agribusiness Professional) */}
+            {activeTab === 'compliance' && user.accountType === 'Agribusiness' && (
+              <AgribusinessComplianceSection farms={farms} />
             )}
 
             {/* 2. MY PLANTS TAB */}
