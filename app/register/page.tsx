@@ -25,8 +25,8 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const { signup, verifyEmail, resendVerificationCode } = useAuth();
 
-  const step = searchParams.get('step') === 'verify' ? 'verify' : 'form';
-  const emailFromUrl = searchParams.get('email') || '';
+  const step = searchParams?.get('step') === 'verify' ? 'verify' : 'form';
+  const emailFromUrl = searchParams?.get('email') || '';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState(emailFromUrl);

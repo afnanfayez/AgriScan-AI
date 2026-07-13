@@ -114,7 +114,7 @@ function DashboardContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const plantIdParam = searchParams.get('plantId');
+  const plantIdParam = searchParams?.get('plantId') ?? null;
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
@@ -265,7 +265,7 @@ function DashboardContent() {
   }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
 
   useEffect(() => {
-    const routeTab = ROUTE_TABS[pathname.toLowerCase()];
+    const routeTab = pathname ? ROUTE_TABS[pathname.toLowerCase()] : undefined;
     if (routeTab && routeTab !== activeTab) {
       setActiveTab(routeTab);
       if (routeTab !== 'plants') {
@@ -2765,7 +2765,7 @@ function DashboardContent() {
 
             <button
               onClick={() => setShowNotifDrawer(false)}
-              className="w-full py-3 border border-stone-200 dark:border-slate-800 hover:bg-stone-50 dark:hover:bg-slate-800 rounded-xl text-xs font-semibold text-stone-700 dark:text-slate-350 cursor-pointer text-center font-mono"
+              className="w-full rounded-xl border border-stone-200 bg-white py-3 text-center font-mono text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-950 dark:border-slate-700/80 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-emerald-500/35 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-100"
             >
               Close Drawer
             </button>

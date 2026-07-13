@@ -25,10 +25,10 @@ function ForgotPasswordForm() {
   const searchParams = useSearchParams();
   const { requestPasswordReset, verifyResetCode, confirmPasswordReset } = useAuth();
 
-  const stepParam = searchParams.get('step');
+  const stepParam = searchParams?.get('step');
   const step: Step = stepParam === 'otp' ? 'otp' : stepParam === 'newpass' ? 'newpass' : 'request';
 
-  const [resetEmail, setResetEmail] = useState(searchParams.get('email') || '');
+  const [resetEmail, setResetEmail] = useState(searchParams?.get('email') || '');
   const [resetOtpDigits, setResetOtpDigits] = useState(['', '', '', '', '', '']);
   const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [newPassword, setNewPassword] = useState('');
