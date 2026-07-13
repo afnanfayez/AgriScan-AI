@@ -36,14 +36,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, type, plantingDate, photoUrl, farmId } = await req.json();
+    const { name, type, plantingDate, photoUrl, farmId, healthStatus } = await req.json();
 
     if (!name || !type || !plantingDate) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const supabase = await createClient();
-    const plant = await createPlant(supabase, user, { name, type, plantingDate, photoUrl, farmId });
+    const plant = await createPlant(supabase, user, { name, type, plantingDate, photoUrl, farmId, healthStatus });
 
     return NextResponse.json({ success: true, plant });
   } catch (error: any) {

@@ -28,6 +28,7 @@ export interface FarmField {
   latitude?: number;
   longitude?: number;
   cropType?: string;
+  cropTypes?: string[];
   createdAt: string;
 }
 
@@ -254,10 +255,17 @@ export interface MarketPrice {
 
 export interface ScanResultItem {
   imageUrl: string;
+  cropType?: string;
   diagnosis: string;
   confidence: number;
   severity: 'Low' | 'Medium' | 'High';
   symptoms: string;
+  visibleOrgans?: string[];
+  likelyCause?: string;
+  affectedAreaPercent?: number;
+  scoutingNotes?: string;
+  recommendedAction?: string;
+  treatmentPriority?: 'Monitor' | 'Treat Soon' | 'Urgent';
 }
 
 // Commercial Farmer

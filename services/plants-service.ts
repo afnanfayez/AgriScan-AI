@@ -64,6 +64,7 @@ export interface CreatePlantInput {
   plantingDate: string;
   photoUrl?: string;
   farmId?: string;
+  healthStatus?: 'Healthy' | 'Warning' | 'Critical';
 }
 
 export async function createPlant(
@@ -71,7 +72,7 @@ export async function createPlant(
   user: SupabaseUserProfile,
   input: CreatePlantInput
 ): Promise<PlantCrop> {
-  const { name, type, plantingDate, photoUrl, farmId } = input;
+  const { name, type, plantingDate, photoUrl, farmId, healthStatus = 'Healthy' } = input;
 
   // Validate or assign farm
   let targetFarmId = farmId;
@@ -92,7 +93,7 @@ export async function createPlant(
       name,
       type,
       planting_date: plantingDate,
-      health_status: 'Healthy',
+      health_status: healthStatus,
       photo_url: storedPhotoUrl,
       farm_id: targetFarmId,
       user_id: user.id,
@@ -111,7 +112,7 @@ export async function createPlant(
     .insert({
       plant_id: newPlant.id,
       user_id: user.id,
-      content: `Plant registered. Cultivar: ${type}. Planting Date: ${plantingDate}. Initial health assessment is Healthy.`,
+      content: `Plant registered. Cultivar: ${type}. Planting Date: ${plantingDate}. Initial health assessment is ${healthStatus}.`,
     });
 
   if (noteError) console.error('Error creating initial note:', noteError);

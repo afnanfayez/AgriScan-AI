@@ -84,24 +84,32 @@ function calculateSporeIndex(tempC: number, humidity: number, rainfall: number) 
 }
 
 async function resolveLocation(location: string): Promise<GeocodingResult> {
-  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
-  url.searchParams.set('name', location);
-  url.searchParams.set('count', '1');
-  url.searchParams.set('language', 'en');
-  url.searchParams.set('format', 'json');
+  const candidates = Array.from(new Set([
+    location.trim(),
+    location.replace(/,\s*[A-Z]{2}\b/g, '').trim(),
+    location.split(',')[0]?.trim(),
+  ].filter(Boolean)));
 
-  const response = await fetch(url, { next: { revalidate: 60 * 60 } });
-  if (!response.ok) {
-    throw new Error('Could not resolve location for weather data.');
+  for (const candidate of candidates) {
+    const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+    url.searchParams.set('name', candidate);
+    url.searchParams.set('count', '1');
+    url.searchParams.set('language', 'en');
+    url.searchParams.set('format', 'json');
+
+    const response = await fetch(url, { next: { revalidate: 60 * 60 } });
+    if (!response.ok) {
+      throw new Error('Could not resolve location for weather data.');
+    }
+
+    const payload = await response.json();
+    const result = payload.results?.[0];
+    if (result) {
+      return result;
+    }
   }
 
-  const payload = await response.json();
-  const result = payload.results?.[0];
-  if (!result) {
-    throw new Error(`No weather location found for "${location}".`);
-  }
-
-  return result;
+  throw new Error(`No weather location found for "${location}".`);
 }
 
 async function fetchWeatherForPoint(

@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import type { SupabaseUserProfile } from '@/lib/auth';
 import type { FarmField } from '@/types/domain';
+import { formatCropTypes, parseCropTypes } from '@/lib/crop-types';
 import { ServiceError } from './errors';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -12,7 +13,8 @@ const mapFarm = (f: any): FarmField => ({
   zoneCount: f.zone_count,
   location: f.location ?? undefined,
   acreage: f.acreage ?? undefined,
-  cropType: f.crop_type ?? undefined,
+  cropType: formatCropTypes(f.crop_type),
+  cropTypes: parseCropTypes(f.crop_type),
   latitude: f.latitude ?? undefined,
   longitude: f.longitude ?? undefined,
   createdAt: f.created_at,
