@@ -117,6 +117,7 @@ function DashboardContent() {
   const plantIdParam = searchParams.get('plantId');
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
   // Synchronize plantId from URL search params to AuthContext selectedPlantId
   useEffect(() => {
@@ -215,6 +216,7 @@ function DashboardContent() {
   const [settingsUnits, setSettingsUnits] = useState<'metric' | 'imperial'>('metric');
   const [settingsPlan, setSettingsPlan] = useState<'Free' | 'Pro' | 'Enterprise'>('Free');
   const [settingsAccountType, setSettingsAccountType] = useState<'Gardener' | 'Farmer' | 'Nursery' | 'Agribusiness'>('Gardener');
+  const [settingsAvatarUrl, setSettingsAvatarUrl] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -255,12 +257,22 @@ function DashboardContent() {
     pushWorkspaceUrl('/My-Plants');
   }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
 
+  const openFieldDetails = useCallback((fieldId: string) => {
+    setSelectedPlantId(null);
+    setSelectedFieldId(fieldId);
+    setActiveTab('fieldmap');
+    pushWorkspaceUrl('/Field-Map');
+  }, [pushWorkspaceUrl, setActiveTab, setSelectedPlantId]);
+
   useEffect(() => {
     const routeTab = ROUTE_TABS[pathname.toLowerCase()];
     if (routeTab && routeTab !== activeTab) {
       setActiveTab(routeTab);
       if (routeTab !== 'plants') {
         setSelectedPlantId(null);
+      }
+      if (routeTab !== 'fieldmap') {
+        setSelectedFieldId(null);
       }
       if (routeTab === 'plants') {
         setStatusFilter('all');
@@ -361,6 +373,7 @@ function DashboardContent() {
         setSettingsUnits(user.units || 'metric');
         setSettingsPlan(user.plan || 'Free');
         setSettingsAccountType(user.accountType || 'Gardener');
+        setSettingsAvatarUrl(user.avatarUrl || '');
       }, 0);
     }
   }, [user]);
@@ -977,7 +990,8 @@ function DashboardContent() {
           location: settingsLocation.trim(),
           units: settingsUnits,
           plan: settingsPlan,
-          accountType: settingsAccountType
+          accountType: settingsAccountType,
+          avatarUrl: settingsAvatarUrl || undefined
         })
       });
       const data = await res.json();
@@ -1474,13 +1488,27 @@ function DashboardContent() {
                 user={user}
                 farms={farms}
                 plants={plants}
-                onViewField={() => openTab('fieldmap')}
+                weatherData={weatherData}
+                weatherLoading={weatherLoading}
+                weatherError={weatherError}
+                weatherLocationInput={weatherLocationInput}
+                isSavingWeatherLocation={isSavingWeatherLocation}
+                onWeatherLocationInputChange={setWeatherLocationInput}
+                onSaveWeatherLocation={saveWeatherLocation}
+                onViewField={openFieldDetails}
               />
             )}
 
             {/* 1c. FIELD MAP TAB (Commercial Farmer) */}
             {activeTab === 'fieldmap' && user.accountType === 'Farmer' && (
-              <FarmerFieldMapSection farms={farms} plants={plants} />
+              <FarmerFieldMapSection
+                farms={farms}
+                plants={plants}
+                selectedFieldId={selectedFieldId}
+                onViewField={openFieldDetails}
+                onCloseFieldDetails={() => setSelectedFieldId(null)}
+                onFieldCreated={refreshAll}
+              />
             )}
 
             {/* 1d. INVENTORY OVERVIEW TAB (Nursery Operator) */}
@@ -2394,6 +2422,7 @@ function DashboardContent() {
                 settingsUnits={settingsUnits}
                 settingsPlan={settingsPlan}
                 settingsAccountType={settingsAccountType}
+                settingsAvatarUrl={settingsAvatarUrl}
                 settingsError={settingsError}
                 settingsSuccess={settingsSuccess}
                 settingsSaving={settingsSaving}
@@ -2402,6 +2431,7 @@ function DashboardContent() {
                 onUnitsChange={setSettingsUnits}
                 onPlanChange={setSettingsPlan}
                 onAccountTypeChange={setSettingsAccountType}
+                onAvatarChange={setSettingsAvatarUrl}
                 onSubmit={handleSaveSettings}
               />
             )}

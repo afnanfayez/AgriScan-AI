@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Link2, Loader2, MapPin, Plus, Sprout, Unlink } 
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
+import { parseCropTypes } from '@/lib/crop-types';
 import type { FarmField, PlantCrop } from '@/types/domain';
 
 type FarmStatus = 'Healthy' | 'Warning' | 'Critical';
@@ -23,8 +24,8 @@ const statusTone: Record<FarmStatus, BadgeTone> = {
   Critical: 'danger',
 };
 
-function inferFarmType(cropType?: string): string {
-  const value = (cropType || '').toLowerCase();
+function inferFarmType(farm: FarmField): string {
+  const value = parseCropTypes(farm.cropTypes || farm.cropType).join(' ').toLowerCase();
   if (value.includes('seedling') || value.includes('nursery')) return 'Nursery';
   return 'Commercial Farm';
 }
@@ -178,11 +179,12 @@ export default function AgribusinessMultifarmSection({ farms, plants }: Agribusi
             const status = getFarmStatus(farm.id, plants);
             const isExpanded = expandedFarmId === farm.id;
             const plantCount = plants.filter((p) => p.farmId === farm.id).length;
+            const cropTypes = parseCropTypes(farm.cropTypes || farm.cropType);
             return (
               <Card key={farm.id}>
                 <CardHeader
                   title={farm.name}
-                  subtitle={inferFarmType(farm.cropType)}
+                  subtitle={inferFarmType(farm)}
                   action={<Badge tone={statusTone[status]}>{status}</Badge>}
                 />
                 <CardBody className="space-y-3">
@@ -202,7 +204,15 @@ export default function AgribusinessMultifarmSection({ farms, plants }: Agribusi
                       </div>
                       <div className="flex items-center justify-between py-1">
                         <span className="text-stone-400 dark:text-slate-500">Crop Type</span>
-                        <span className="font-semibold">{farm.cropType || 'Unspecified'}</span>
+                        <span className="flex flex-wrap justify-end gap-1.5">
+                          {cropTypes.length > 0 ? cropTypes.map((crop) => (
+                            <span key={crop} className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              {crop}
+                            </span>
+                          )) : (
+                            <span className="font-semibold">Unspecified</span>
+                          )}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between py-1">
                         <span className="text-stone-400 dark:text-slate-500">Plant Count</span>
@@ -243,7 +253,9 @@ export default function AgribusinessMultifarmSection({ farms, plants }: Agribusi
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-stone-900 dark:text-slate-50">{farm.name}</p>
-                  <p className="text-xs text-stone-500 dark:text-slate-400">{farm.cropType || 'Unspecified crop'}</p>
+                  <p className="text-xs text-stone-500 dark:text-slate-400">
+                    {parseCropTypes(farm.cropTypes || farm.cropType).join(', ') || 'Unspecified crop'}
+                  </p>
                 </div>
                 <button
                   onClick={() => linkFarm(farm.id)}

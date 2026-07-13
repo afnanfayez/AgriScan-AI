@@ -5,13 +5,12 @@ import { motion } from 'motion/react';
 import { AlertTriangle, DollarSign, Loader2, TrendingDown } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { StatCard, StatCardGrid } from '@/components/ui/stat-card';
-import { BarChartCard, DonutChartCard, LineChartCard } from '@/components/ui/charts';
+import { BarChartCard, LineChartCard } from '@/components/ui/charts';
 import type { FarmField } from '@/types/domain';
 
 interface FarmerAnalytics {
   infectionTrend: { date: string; infectionPercentage: number }[];
   seasonComparison: { period: string; expense: number; revenue: number }[];
-  riskDistribution: { label: string; value: number }[];
   estimatedYieldLossPct: number;
   estimatedCostImpact: number;
   highestRiskField: { id: string; name: string; infectionPercentage: number } | null;
@@ -134,8 +133,6 @@ export default function FarmerAnalyticsSection({ farms }: FarmerAnalyticsSection
               ]}
             />
           </div>
-
-          <DonutChartCard title="Risk Distribution" subtitle="Share of fields by risk category." data={analytics.riskDistribution} />
         </>
       ) : null}
     </motion.div>

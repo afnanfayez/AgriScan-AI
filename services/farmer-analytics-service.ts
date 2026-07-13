@@ -7,7 +7,6 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 export interface FarmerAnalytics {
   infectionTrend: { date: string; infectionPercentage: number }[];
   seasonComparison: { period: string; expense: number; revenue: number }[];
-  riskDistribution: { label: 'Healthy' | 'Warning' | 'Critical'; value: number }[];
   estimatedYieldLossPct: number;
   estimatedCostImpact: number;
   highestRiskField: { id: string; name: string; infectionPercentage: number } | null;
@@ -108,46 +107,6 @@ export async function getFarmerAnalytics(
       revenue: Math.round(v.revenue * 100) / 100,
     }));
 
-  // ── plants (used for riskDistribution - worst-case status rollup per farm) ──
-  let plantsData: { farm_id: string; health_status: string }[] = [];
-  if (farmIds.length > 0) {
-    const { data, error: plantsError } = await supabase
-      .from('plants')
-      .select('farm_id, health_status')
-      .in('farm_id', farmIds);
-
-    if (plantsError) {
-      console.error('Error fetching plants for analytics:', plantsError);
-      throw new ServiceError(plantsError.message, 500);
-    }
-
-    plantsData = data || [];
-  }
-
-  const severityRank: Record<string, number> = { Healthy: 0, Warning: 1, Critical: 2 };
-  const worstStatusByFarm = new Map<string, 'Healthy' | 'Warning' | 'Critical'>();
-  for (const p of plantsData) {
-    const current = worstStatusByFarm.get(p.farm_id) || 'Healthy';
-    const status = (['Healthy', 'Warning', 'Critical'].includes(p.health_status) ? p.health_status : 'Healthy') as
-      | 'Healthy'
-      | 'Warning'
-      | 'Critical';
-    if (severityRank[status] > severityRank[current]) {
-      worstStatusByFarm.set(p.farm_id, status);
-    }
-  }
-
-  const riskCounts: Record<'Healthy' | 'Warning' | 'Critical', number> = { Healthy: 0, Warning: 0, Critical: 0 };
-  for (const farm of farms) {
-    const status = worstStatusByFarm.get(farm.id as string) || 'Healthy';
-    riskCounts[status] += 1;
-  }
-
-  const riskDistribution = (['Healthy', 'Warning', 'Critical'] as const).map((label) => ({
-    label,
-    value: riskCounts[label],
-  }));
-
   // ── estimatedYieldLossPct: avg of latest field_scans.infection_percentage across fields ──
   // fieldScans is ascending by created_at, so the last write seen per farm_id is the latest.
   const latestByFarm = new Map<string, number>();
@@ -182,7 +141,6 @@ export async function getFarmerAnalytics(
   return {
     infectionTrend,
     seasonComparison,
-    riskDistribution,
     estimatedYieldLossPct,
     estimatedCostImpact,
     highestRiskField,

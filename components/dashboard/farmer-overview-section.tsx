@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import type React from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, ChevronRight, CloudSun, Droplets, FileDown, Loader2, Map, ShieldCheck } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { StatCard, StatCardGrid } from '@/components/ui/stat-card';
 import { Table, type TableColumn } from '@/components/ui/table';
+import { parseCropTypes } from '@/lib/crop-types';
+import { getFieldCropHealth } from '@/lib/field-crop-health';
 import type { FarmField, PlantCrop } from '@/types/domain';
 
 type FieldStatus = 'Healthy' | 'Warning' | 'Critical';
@@ -36,83 +38,76 @@ interface FarmerOverviewSectionProps {
   user: any;
   farms: FarmField[];
   plants: PlantCrop[];
+  weatherData: any;
+  weatherLoading: boolean;
+  weatherError: string;
+  weatherLocationInput: string;
+  isSavingWeatherLocation: boolean;
+  onWeatherLocationInputChange: (value: string) => void;
+  onSaveWeatherLocation: (event: React.FormEvent) => void;
   onViewField?: (farmId: string) => void;
 }
 
 interface AttentionRow {
   id: string;
+  farmId: string;
   name: string;
   cropType: string;
   status: FieldStatus;
 }
 
-export default function FarmerOverviewSection({ user, farms, plants, onViewField }: FarmerOverviewSectionProps) {
-  const [weatherData, setWeatherData] = useState<any>(null);
-  const [weatherLoading, setWeatherLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState('');
-
-  // Fetch regional weather the same way the account-wide dashboard tab does:
-  // prefer the saved profile location, else geolocation, else a sane default.
-  useEffect(() => {
-    setWeatherLoading(true);
-    setWeatherError('');
-    const preferredLocation = user?.location || '';
-    const fetchWeather = (url: string) =>
-      fetch(url)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            setWeatherData(data);
-          } else {
-            setWeatherData(null);
-            setWeatherError(data.error || 'Weather data unavailable');
-          }
-        })
-        .catch(() => {
-          setWeatherData(null);
-          setWeatherError('Weather data unavailable');
-        })
-        .finally(() => setWeatherLoading(false));
-
-    if (preferredLocation) {
-      fetchWeather(`/api/weather?location=${encodeURIComponent(preferredLocation)}`);
-    } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          fetchWeather(`/api/weather?lat=${latitude}&lon=${longitude}`);
-        },
-        () => fetchWeather('/api/weather?location=Central Valley, CA'),
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 15 * 60 * 1000 }
-      );
-    } else {
-      fetchWeather('/api/weather?location=Central Valley, CA');
-    }
-  }, [user?.location]);
-
+export default function FarmerOverviewSection({
+  user,
+  farms,
+  plants,
+  weatherData,
+  weatherLoading,
+  weatherError,
+  weatherLocationInput,
+  isSavingWeatherLocation,
+  onWeatherLocationInputChange,
+  onSaveWeatherLocation,
+  onViewField,
+}: FarmerOverviewSectionProps) {
   const totalFields = farms.length;
   const totalArea = farms.reduce((sum, f) => sum + (f.acreage || 0), 0);
   const fieldStatuses = farms.map((f) => ({ farm: f, status: getFieldStatus(f.id, plants) }));
+  const cropStatuses = getFieldCropHealth(farms, plants);
   const criticalFields = fieldStatuses.filter((f) => f.status === 'Critical').length;
   const healthyFields = fieldStatuses.filter((f) => f.status === 'Healthy').length;
   const healthScore = totalFields > 0 ? Math.round((healthyFields / totalFields) * 100) : 100;
 
-  const attentionRows: AttentionRow[] = fieldStatuses
-    .filter((f) => f.status === 'Warning' || f.status === 'Critical')
-    .sort((a, b) => (a.status === b.status ? 0 : a.status === 'Critical' ? -1 : 1))
-    .map((f) => ({ id: f.farm.id, name: f.farm.name, cropType: f.farm.cropType || 'Unspecified', status: f.status }));
+  const attentionRows: AttentionRow[] = cropStatuses
+    .filter((item) => item.status === 'Warning' || item.status === 'Critical')
+    .sort((a, b) => (a.status === b.status ? a.cropType.localeCompare(b.cropType) : a.status === 'Critical' ? -1 : 1))
+    .slice(0, 3)
+    .map((item) => ({
+      id: item.id,
+      farmId: item.farm.id,
+      name: item.farm.name,
+      cropType: item.cropType,
+      status: item.status,
+    }));
 
   // Weather-based risk alert: surface an upcoming humid/high-blight-risk day
   // against fields growing blight-susceptible crops, so the risk is tied to
   // specific fields rather than just a generic regional badge.
-  const susceptibleFields = farms.filter((f) => isBlightSusceptible(f.cropType));
+  const susceptibleFields = farms.filter((f) => parseCropTypes(f.cropTypes || f.cropType).some((crop) => isBlightSusceptible(crop)));
   const riskyForecastDay = weatherData?.forecast?.find((d: { sporeIndex: number }) => d.sporeIndex >= 6);
   const showWeatherRiskAlert =
     !!weatherData && susceptibleFields.length > 0 && (weatherData.current.blightRisk !== 'Low' || !!riskyForecastDay);
 
   const columns: TableColumn<AttentionRow>[] = [
     { key: 'name', header: 'Field' },
-    { key: 'cropType', header: 'Crop Type' },
+    {
+      key: 'cropType',
+      header: 'Crop',
+      render: (row) => (
+        <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+          {row.cropType}
+        </span>
+      ),
+    },
     {
       key: 'status',
       header: 'Status',
@@ -163,83 +158,104 @@ export default function FarmerOverviewSection({ user, farms, plants, onViewField
         <StatCard label="Overall Health Score" value={`${healthScore}%`} icon={ShieldCheck} tone={healthScore >= 80 ? 'success' : healthScore >= 50 ? 'warning' : 'danger'} />
       </StatCardGrid>
 
-      <Card>
-        <CardHeader
-          title="Regional Weather"
-          subtitle="Live conditions for your registered location."
-          action={<div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20"><CloudSun className="h-5 w-5" /></div>}
-        />
-        <CardBody>
-          {weatherLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
-            </div>
-          ) : weatherError ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm leading-6 text-amber-900 dark:text-amber-200 dark:border-amber-900/30">
-              {weatherError}. Update your registered location under Settings.
-            </div>
-          ) : weatherData ? (
-            <div className="space-y-5">
-              <div>
-                <p className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-slate-50">
-                  {weatherData.current.temp}{weatherData.current.unit}
-                </p>
-                <p className="mt-1 text-sm text-stone-600 dark:text-slate-350">{weatherData.current.condition}</p>
-                <p className="mt-1 text-xs text-stone-400 dark:text-slate-500">Based on {weatherData.resolvedLocation}</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-t border-stone-100 dark:border-slate-800 pt-4 text-center">
-                {[
-                  { label: 'Humidity', value: `${weatherData.current.humidity}%` },
-                  { label: 'Wind', value: weatherData.current.wind },
-                  { label: 'Moisture', value: weatherData.current.soilMoisture },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl bg-stone-50 dark:bg-slate-950/40 px-2 py-3">
-                    <span className="block text-[11px] font-medium text-stone-400 dark:text-slate-500">{item.label}</span>
-                    <span className="mt-1 block text-sm font-semibold text-stone-900 dark:text-slate-100">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950/40 p-4 text-sm text-stone-500 dark:text-slate-400">
-              Weather data is unavailable for this account location.
-            </div>
-          )}
-        </CardBody>
-      </Card>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.1fr)]">
+        <div className="space-y-6">
+          <Card className="h-full">
+            <CardHeader
+              title="Regional Weather"
+              subtitle="Live conditions for your registered location."
+              action={<div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20"><CloudSun className="h-5 w-5" /></div>}
+            />
+            <CardBody>
+              <form onSubmit={onSaveWeatherLocation} className="mb-5 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="search"
+                  value={weatherLocationInput}
+                  onChange={(event) => onWeatherLocationInputChange(event.target.value)}
+                  placeholder="Search city or region"
+                  className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-500/70 dark:focus:bg-slate-900"
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingWeatherLocation || !weatherLocationInput.trim()}
+                  className="rounded-xl bg-stone-900 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-55 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200"
+                >
+                  {isSavingWeatherLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update'}
+                </button>
+              </form>
 
-      {showWeatherRiskAlert && (
-        <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900/30 dark:bg-amber-950/20">
-          <CardBody className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
-              <Droplets className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Weather-Based Risk Alert</p>
-              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
-                {riskyForecastDay
-                  ? `Upcoming high humidity (${riskyForecastDay.day}, ${riskyForecastDay.humidity}%) increases fungal blight risk for `
-                  : `Current conditions (${weatherData.current.blightRisk} blight risk) increase fungal disease pressure for `}
-                {susceptibleFields.map((f) => f.name).join(', ')}. Consider a preventive fungicide pass or a follow-up scan.
-              </p>
+              {weatherLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+                </div>
+              ) : weatherError ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/30 dark:text-amber-200">
+                  {weatherError}. Update your registered location under Settings.
+                </div>
+              ) : weatherData ? (
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-slate-50">
+                      {weatherData.current.temp}{weatherData.current.unit}
+                    </p>
+                    <p className="mt-1 text-sm text-stone-600 dark:text-slate-350">{weatherData.current.condition}</p>
+                    <p className="mt-1 text-xs text-stone-400 dark:text-slate-500">Based on {weatherData.resolvedLocation}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-t border-stone-100 pt-4 text-center dark:border-slate-800">
+                    {[
+                      { label: 'Humidity', value: `${weatherData.current.humidity}%` },
+                      { label: 'Wind', value: weatherData.current.wind },
+                      { label: 'Moisture', value: weatherData.current.soilMoisture },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl bg-stone-50 px-2 py-3 dark:bg-slate-950/40">
+                        <span className="block text-[11px] font-medium text-stone-400 dark:text-slate-500">{item.label}</span>
+                        <span className="mt-1 block text-sm font-semibold text-stone-900 dark:text-slate-100">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                  Weather data is unavailable for this account location.
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
+          {showWeatherRiskAlert && (
+            <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900/30 dark:bg-amber-950/20">
+              <CardBody className="flex items-start gap-3">
+                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
+                  <Droplets className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Weather-Based Risk Alert</p>
+                  <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                    {riskyForecastDay
+                      ? `Upcoming high humidity (${riskyForecastDay.day}, ${riskyForecastDay.humidity}%) increases fungal blight risk for `
+                      : `Current conditions (${weatherData.current.blightRisk} blight risk) increase fungal disease pressure for `}
+                    {susceptibleFields.map((f) => f.name).join(', ')}. Consider a preventive fungicide pass or a follow-up scan.
+                  </p>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+        </div>
+
+        <Card className="min-w-0">
+          <CardHeader title="Fields Needing Attention" subtitle="Warning and critical fields, sorted worst-first." />
+          <CardBody className="p-0 sm:p-0">
+            <div className="p-5">
+              <Table<AttentionRow>
+                columns={columns}
+                rows={attentionRows}
+                onRowClick={(row) => onViewField?.(row.farmId)}
+                emptyMessage="No fields currently need attention. Every field is healthy."
+              />
             </div>
           </CardBody>
         </Card>
-      )}
-
-      <Card>
-        <CardHeader title="Fields Needing Attention" subtitle="Warning and critical fields, sorted worst-first." />
-        <CardBody className="p-0 sm:p-0">
-          <div className="p-5">
-            <Table<AttentionRow>
-              columns={columns}
-              rows={attentionRows}
-              onRowClick={(row) => onViewField?.(row.id)}
-              emptyMessage="No fields currently need attention. Every field is healthy."
-            />
-          </div>
-        </CardBody>
-      </Card>
+      </div>
     </motion.div>
   );
 }
