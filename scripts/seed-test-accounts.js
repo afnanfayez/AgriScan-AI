@@ -21,6 +21,7 @@
 const fs   = require('fs');
 const path = require('path');
 const https = require('https');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 // ─── 1. Parse .env ───────────────────────────────────────────────────────────
@@ -1125,6 +1126,8 @@ async function seedAgribusiness(userId, userEmail, userName) {
     location: 'Nakuru, Rift Valley, Kenya',
     acreage: 1500,
     crop_type: 'Maize (Corn)',
+    latitude: -0.3031,
+    longitude: 36.0800,
   }).select().single();
   if (farm1Err) { console.error('  Farm1 error:', farm1Err.message); return; }
 
@@ -1135,11 +1138,29 @@ async function seedAgribusiness(userId, userEmail, userName) {
     location: 'Kilifi, Coast Province, Kenya',
     acreage: 820,
     crop_type: 'Sugarcane',
+    latitude: -3.6305,
+    longitude: 39.8499,
   }).select().single();
   if (farm2Err) { console.error('  Farm2 error:', farm2Err.message); return; }
 
+  // Third division — nursery stock, so the Agribusiness org has one Commercial
+  // Farm + one Nursery to link (Sugarcane Estate stays unlinked, demonstrating
+  // the "link a farm" picker in Multi-Farm Manager).
+  const { data: farm3, error: farm3Err } = await supabase.from('farms').insert({
+    name: 'Okafor Seedling Nursery — Eldoret',
+    user_id: userId,
+    zone_count: 4,
+    location: 'Eldoret, Rift Valley, Kenya',
+    acreage: 15,
+    crop_type: 'Seedlings / Nursery Stock',
+    latitude: 0.5143,
+    longitude: 35.2698,
+  }).select().single();
+  if (farm3Err) { console.error('  Farm3 error:', farm3Err.message); return; }
+
   const farmId1 = farm1.id;
   const farmId2 = farm2.id;
+  const farmId3 = farm3.id;
 
   // ── Plants ──────────────────────────────────────────────────────────────────
   const plantsData = [
@@ -1436,6 +1457,71 @@ async function seedAgribusiness(userId, userEmail, userName) {
       content: "What Brix do you need to hit for premium pricing at Mumias mill? We're averaging 18.4 on our ratoon crop and the estate contract states 17.5 as the minimum — curious whether going above 19 actually triggers a price premium or just better acceptance rates.",
       user_id: userId, author_name: userName, category: 'General',
     });
+  }
+
+  // ── Organization (links Maize commercial division + Eldoret nursery) ────────
+  console.log('  [Agribusiness] Adding organization, org members, API key, audit reports...');
+  const { data: org, error: orgErr } = await supabase.from('organizations').insert({
+    owner_user_id: userId,
+    name: 'Okafor AgriHoldings',
+  }).select().single();
+
+  if (orgErr) {
+    console.error('  Organization error:', orgErr.message);
+  } else {
+    const orgId = org.id;
+
+    await supabase.from('organization_farms').insert([
+      { org_id: orgId, farm_id: farmId1 }, // Rift Valley Maize Division — Commercial Farm
+      { org_id: orgId, farm_id: farmId3 }, // Okafor Seedling Nursery — Nursery
+    ]);
+
+    await supabase.from('org_members').insert([
+      { org_id: orgId, email: 'agriops.manager@agriscan-test.dev', role: 'Admin' },
+      { org_id: orgId, email: 'analyst.nairobi@agriscan-test.dev', role: 'Analyst' },
+      { org_id: orgId, email: 'viewer.investor@agriscan-test.dev', role: 'Viewer' },
+    ]);
+
+    // API key — store only the hash, matching how the real API key creation
+    // endpoint works (plaintext secret is shown once, never persisted).
+    const apiSecret = `agai_${crypto.randomBytes(24).toString('hex')}`;
+    const apiKeyHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
+    const { data: apiKey, error: apiKeyErr } = await supabase.from('api_keys').insert({
+      user_id: userId,
+      label: 'Production Integration',
+      key_prefix: apiSecret.slice(0, 12),
+      key_hash: apiKeyHash,
+      status: 'Active',
+    }).select().single();
+
+    if (apiKeyErr) {
+      console.error('  API key error:', apiKeyErr.message);
+    } else {
+      const endpoints = ['/api/v1/farms', '/api/v1/scans', '/api/v1/plants', '/api/v1/analytics', '/api/v1/expenses'];
+      const statusCodes = [200, 200, 200, 201, 404];
+      const usageLogs = Array.from({ length: 26 }, (_, i) => ({
+        api_key_id: apiKey.id,
+        endpoint: endpoints[i % endpoints.length],
+        status_code: statusCodes[i % statusCodes.length],
+        requested_at: new Date(Date.now() - i * 13 * 60 * 60 * 1000).toISOString(),
+      }));
+      await supabase.from('api_usage_logs').insert(usageLogs);
+    }
+
+    await supabase.from('audit_reports').insert([
+      {
+        user_id: userId, farm_id: farmId1,
+        title: 'Q3 Phytosanitary Compliance — Rift Valley Maize Division',
+        summary: 'Fall Armyworm outbreak response protocol, chemical application logs, and PPE compliance records for Block S3 emergency treatment.',
+        status: 'Final',
+      },
+      {
+        user_id: userId, farm_id: farmId3,
+        title: 'Nursery Stock Health Audit — Eldoret',
+        summary: 'Draft audit covering propagation records and disease-screening history ahead of Q4 export certification.',
+        status: 'Draft',
+      },
+    ]);
   }
 
   console.log('  ✅ Agribusiness seeding complete.');
