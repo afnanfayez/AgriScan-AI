@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { farmId, images } = await req.json();
+    const { farmId, cropType, images } = await req.json();
 
     if (!farmId) {
       return NextResponse.json({ error: 'Farm ID is required' }, { status: 400 });
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient();
-    const result = await createFieldScan(supabase, user, { farmId, images });
+    const result = await createFieldScan(supabase, user, { farmId, cropType, images });
 
     return NextResponse.json({ success: true, fieldScan: result.fieldScan });
   } catch (error: any) {

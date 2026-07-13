@@ -1,6 +1,7 @@
 import { uploadImageToStorage } from '@/lib/supabase';
 import type { ScanResultItem } from '@/types/domain';
 import { runGeminiPlantAnalysis } from './gemini-analysis';
+import { ServiceError } from './errors';
 
 export interface BatchAnalysisResult {
   totalSamples: number;
@@ -36,22 +37,50 @@ export async function runGeminiBatchAnalysis(
     }
 
     try {
-      const { diagnosis, confidence, severity, symptoms } = await runGeminiPlantAnalysis(image, context);
-      results.push({ imageUrl, diagnosis, confidence, severity, symptoms });
+      const analysis = await runGeminiPlantAnalysis(image, context);
+      results.push({
+        imageUrl,
+        diagnosis: analysis.diagnosis,
+        confidence: analysis.confidence,
+        severity: analysis.severity,
+        symptoms: analysis.symptoms,
+        visibleOrgans: analysis.visibleOrgans,
+        likelyCause: analysis.likelyCause,
+        affectedAreaPercent: analysis.affectedAreaPercent,
+        scoutingNotes: analysis.scoutingNotes,
+        recommendedAction: analysis.recommendedAction,
+        treatmentPriority: analysis.treatmentPriority,
+      });
     } catch (analysisError) {
       console.error(`Error analyzing batch image ${i}:`, analysisError);
+      if (
+        analysisError instanceof ServiceError &&
+        (analysisError.status === 429 ||
+          analysisError.message.includes('Gemini quota or rate limit exceeded') ||
+          analysisError.message.includes('Gemini model is unavailable') ||
+          analysisError.message.includes('Gemini API key is not configured'))
+      ) {
+        throw analysisError;
+      }
+
       results.push({
         imageUrl,
         diagnosis: 'Unable to assess image',
         confidence: 1,
         severity: 'Low',
-        symptoms: 'Analysis failed for this image.',
+        symptoms: analysisError instanceof Error ? analysisError.message : 'Analysis failed for this image.',
+        visibleOrgans: [],
+        likelyCause: 'Unclear',
+        affectedAreaPercent: 0,
+        scoutingNotes: 'Retake this sample in bright, even light with the affected tissue filling most of the frame.',
+        recommendedAction: 'Retake the image and rerun analysis before making treatment decisions.',
+        treatmentPriority: 'Monitor',
       });
     }
   }
 
   const totalSamples = results.length;
-  const healthyCount = results.filter((r) => r.diagnosis === 'Healthy').length;
+  const healthyCount = results.filter((r) => r.diagnosis === 'Healthy' || r.likelyCause === 'Healthy').length;
   const infectionPercentage = totalSamples > 0 ? Math.round(((totalSamples - healthyCount) / totalSamples) * 100) : 0;
 
   return { totalSamples, healthyCount, infectionPercentage, results };

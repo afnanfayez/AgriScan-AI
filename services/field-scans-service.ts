@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import type { SupabaseUserProfile } from '@/lib/auth';
-import type { FieldScan } from '@/types/domain';
+import type { FieldScan, ScanResultItem } from '@/types/domain';
+import { hasCropType, parseCropTypes } from '@/lib/crop-types';
 import { ServiceError } from './errors';
 import { runGeminiBatchAnalysis } from './gemini-batch-analysis';
 
@@ -16,6 +17,62 @@ const mapFieldScan = (s: any): FieldScan => ({
   results: s.results || [],
   createdAt: s.created_at,
 });
+
+function scanResultToHealthStatus(result: ScanResultItem): 'Healthy' | 'Warning' | 'Critical' | null {
+  if (result.diagnosis === 'Healthy' || result.likelyCause === 'Healthy') return null;
+  if (result.diagnosis === 'Unable to assess image') return null;
+  if (result.severity === 'High' || result.treatmentPriority === 'Urgent') return 'Critical';
+  return 'Warning';
+}
+
+async function createFieldHealthAlerts(
+  supabase: SupabaseClient,
+  user: SupabaseUserProfile,
+  farm: any,
+  results: ScanResultItem[],
+  cropType?: string
+) {
+  const alertRows = results
+    .map((result, index) => {
+      const healthStatus = scanResultToHealthStatus(result);
+      if (!healthStatus) return null;
+
+      const alertCropType = cropType || parseCropTypes(farm.crop_type)[0] || result.likelyCause || 'Field crop';
+      return {
+        name: `Scan Alert ${index + 1} - ${result.diagnosis}`,
+        type: alertCropType,
+        planting_date: new Date().toISOString().slice(0, 10),
+        health_status: healthStatus,
+        photo_url: result.imageUrl,
+        farm_id: farm.id,
+        user_id: user.id,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  if (alertRows.length === 0) return;
+
+  const { data: insertedPlants, error: plantError } = await supabase
+    .from('plants')
+    .insert(alertRows)
+    .select('id, name, health_status');
+
+  if (plantError) {
+    console.error('Error creating field health alerts:', plantError);
+    throw new ServiceError(plantError.message || 'Failed to update field health status from scan results.', 400);
+  }
+
+  const noteRows = (insertedPlants || []).map((plant: any) => ({
+    plant_id: plant.id,
+    user_id: user.id,
+    content: `Created from field scan. Health status: ${plant.health_status}. Review the scan results for diagnosis and treatment guidance.`,
+  }));
+
+  if (noteRows.length > 0) {
+    const { error: noteError } = await supabase.from('notes').insert(noteRows);
+    if (noteError) console.error('Error creating field scan alert notes:', noteError);
+  }
+}
 
 export async function listFieldScans(supabase: SupabaseClient, farmId?: string | null): Promise<FieldScan[]> {
   let query = supabase.from('field_scans').select('*');
@@ -36,6 +93,7 @@ export async function listFieldScans(supabase: SupabaseClient, farmId?: string |
 
 export interface CreateFieldScanInput {
   farmId: string;
+  cropType?: string;
   images: string[];
 }
 
@@ -48,7 +106,7 @@ export async function createFieldScan(
   user: SupabaseUserProfile,
   input: CreateFieldScanInput
 ): Promise<CreateFieldScanResult> {
-  const { farmId, images } = input;
+  const { farmId, cropType, images } = input;
 
   if (!images || images.length === 0) {
     throw new ServiceError('At least one image is required.', 400);
@@ -66,11 +124,21 @@ export async function createFieldScan(
     throw new ServiceError('Farm not found or unauthorized', 404);
   }
 
+  const selectedCropType = cropType?.trim();
+  const farmCropTypes = parseCropTypes(farm.crop_type);
+  if (selectedCropType && farmCropTypes.length > 0 && !hasCropType(farmCropTypes, selectedCropType)) {
+    throw new ServiceError('Selected crop type is not registered for this field.', 400);
+  }
+
   const { totalSamples, healthyCount, infectionPercentage, results } = await runGeminiBatchAnalysis(
     images,
-    { plantType: farm.crop_type },
+    { plantName: farm.name, plantType: selectedCropType || farm.crop_type },
     `field-scans/${user.id}`
   );
+  const scanResults = results.map((result) => ({
+    ...result,
+    cropType: selectedCropType || parseCropTypes(farm.crop_type)[0],
+  }));
 
   const { data: newFieldScan, error: insertError } = await supabase
     .from('field_scans')
@@ -80,7 +148,7 @@ export async function createFieldScan(
       total_samples: totalSamples,
       healthy_count: healthyCount,
       infection_percentage: infectionPercentage,
-      results,
+      results: scanResults,
     })
     .select()
     .single();
@@ -89,6 +157,8 @@ export async function createFieldScan(
     console.error('Error inserting field scan:', insertError);
     throw new ServiceError(insertError?.message || 'Failed to save field scan', 400);
   }
+
+  await createFieldHealthAlerts(supabase, user, farm, scanResults, selectedCropType);
 
   // Raise an alert notification for high-infection field scans
   if (infectionPercentage >= 25) {
