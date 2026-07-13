@@ -22,7 +22,7 @@ export function Modal({ open, onClose, title, children, footer, className }: Mod
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-950/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[1000] flex items-end justify-center bg-stone-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           onClick={onClose}
         >
           <motion.div
@@ -32,11 +32,11 @@ export function Modal({ open, onClose, title, children, footer, className }: Mod
             transition={{ duration: 0.18 }}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-stone-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900',
+              'max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-stone-200 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl dark:border-slate-800 dark:bg-slate-900',
               className
             )}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-4 sm:p-5 dark:border-slate-800">
               <h2 className="text-lg font-bold text-stone-900 dark:text-slate-50">{title}</h2>
               <button
                 onClick={onClose}
@@ -47,10 +47,10 @@ export function Modal({ open, onClose, title, children, footer, className }: Mod
               </button>
             </div>
 
-            <div className="p-5 sm:p-6">{children}</div>
+            <div className="p-4 sm:p-6">{children}</div>
 
             {footer && (
-              <div className="flex flex-col gap-3 border-t border-stone-100 p-5 dark:border-slate-800 sm:flex-row sm:justify-end">
+              <div className="flex flex-col gap-3 border-t border-stone-100 p-4 sm:flex-row sm:justify-end sm:p-5 dark:border-slate-800">
                 {footer}
               </div>
             )}

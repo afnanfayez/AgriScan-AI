@@ -98,27 +98,30 @@ export default function NurseryOverviewSection() {
             />
           </StatCardGrid>
 
-          <DonutChartCard
-            title="Stock by Category"
-            subtitle="Total quantity on hand grouped by plant type."
-            data={stockByCategory}
-          />
-
-          <Card>
-            <CardHeader
-              title="Batches Needing Attention"
-              subtitle="Batches flagged for treatment or running below their low-stock threshold."
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.1fr)]">
+            <DonutChartCard
+              title="Stock by Category"
+              subtitle="Total quantity on hand grouped by plant type."
+              data={stockByCategory}
             />
-            <CardBody className="p-0">
-              <div className="p-5">
-                <Table<InventoryBatch>
-                  columns={columns}
-                  rows={attentionBatches}
-                  emptyMessage="No batches need attention right now."
-                />
-              </div>
-            </CardBody>
-          </Card>
+
+            <Card>
+              <CardHeader
+                title="Batches Needing Attention"
+                subtitle="Batches flagged for treatment or running below their low-stock threshold."
+              />
+              <CardBody className="p-0">
+                <div className="p-3 sm:p-5">
+                  <Table<InventoryBatch>
+                    columns={columns}
+                    rows={attentionBatches}
+                    emptyMessage="No batches need attention right now."
+                    tableClassName="min-w-full"
+                  />
+                </div>
+              </CardBody>
+            </Card>
+          </div>
         </>
       )}
     </motion.div>

@@ -47,9 +47,9 @@ export default function DashboardShell({
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col font-sans text-stone-800 dark:bg-slate-950 dark:text-slate-100">
       {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white/95 border-b border-stone-200 px-4 py-3 shadow-sm backdrop-blur md:px-6 md:py-4 dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center space-x-3">
+      <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 px-3 py-3 shadow-sm backdrop-blur sm:px-4 md:px-6 md:py-4 dark:border-slate-800 dark:bg-slate-950/90">
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="shrink-0 p-1.5 bg-emerald-600 rounded-lg text-white">
             <Sprout className="h-5 w-5" />
           </div>
@@ -60,7 +60,7 @@ export default function DashboardShell({
         </div>
 
         {/* Localized Weather strip */}
-        <div className="hidden lg:flex items-center space-x-6 text-xs text-stone-500 border-l border-r border-stone-200 px-6 mx-6 dark:border-slate-800 dark:text-slate-400">
+        <div className="hidden xl:flex items-center space-x-6 text-xs text-stone-500 border-l border-r border-stone-200 px-6 mx-6 dark:border-slate-800 dark:text-slate-400">
           <div className="flex items-center space-x-2">
             <MapPin className="h-3.5 w-3.5 text-emerald-600" />
             <span className="font-semibold text-stone-800 dark:text-slate-100">{weatherData?.resolvedLocation || user.location}</span>
@@ -84,7 +84,7 @@ export default function DashboardShell({
         </div>
 
         {/* User profile details, Notifications icon */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <button
             onClick={toggleDarkMode}
             className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-2.5 py-2 text-xs font-semibold text-stone-600 shadow-sm hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -155,7 +155,7 @@ export default function DashboardShell({
       </header>
 
       {isMobileNavOpen && (
-        <div className="sticky top-[57px] z-30 border-b border-stone-200 bg-white/95 p-3 shadow-sm backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/95">
+        <div className="sticky top-[57px] z-30 max-h-[calc(100vh-57px)] overflow-y-auto border-b border-stone-200 bg-white/95 p-3 shadow-sm backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/95">
           <nav className="grid grid-cols-2 gap-2">
             {roleConfig.tabs.map((tab) => {
               const IconComponent = tab.icon;
@@ -167,10 +167,10 @@ export default function DashboardShell({
                     onTabChange(tab.id);
                     setIsMobileNavOpen(false);
                   }}
-                  className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition-all ${isSelected ? (tab.accent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-950 dark:bg-emerald-500/15 dark:text-emerald-200') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-slate-50'}`}
+                  className={`flex min-h-12 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold transition-all sm:px-3 sm:text-sm ${isSelected ? (tab.accent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-950 dark:bg-emerald-500/15 dark:text-emerald-200') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-slate-50'}`}
                 >
                   <IconComponent className={`h-4 w-4 shrink-0 ${isSelected ? '' : 'text-stone-400 dark:text-slate-500'}`} />
-                  <span className="truncate">{tab.label}</span>
+                  <span className="min-w-0 leading-tight line-clamp-2">{tab.label}</span>
                 </button>
               );
             })}
@@ -181,7 +181,7 @@ export default function DashboardShell({
       {/* Main Panel Body */}
       <div className="flex-1 flex md:flex-row">
         {/* Sidebar Navigation */}
-        <nav className="hidden w-64 shrink-0 bg-white border-r border-stone-200 p-4 md:flex md:flex-col md:space-y-1.5 dark:border-slate-800 dark:bg-slate-950">
+        <nav className="hidden w-64 shrink-0 border-r border-stone-200 bg-white p-4 md:flex md:flex-col md:space-y-1.5 lg:w-72 dark:border-slate-800 dark:bg-slate-950">
           {roleConfig.tabs.map((tab) => {
             const IconComponent = tab.icon;
             const isSelected = activeTab === tab.id;
@@ -189,17 +189,17 @@ export default function DashboardShell({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-[15px] font-semibold tracking-wide cursor-pointer transition-all duration-200 whitespace-nowrap w-full ${isSelected ? (tab.accent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-950 dark:bg-emerald-500/15 dark:text-emerald-200') : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'}`}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[14px] font-semibold tracking-wide transition-all duration-200 lg:px-4 lg:text-[15px] ${isSelected ? (tab.accent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-950 dark:bg-emerald-500/15 dark:text-emerald-200') : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'}`}
               >
-                <IconComponent className={`h-4.5 w-4.5 ${isSelected ? '' : 'text-stone-400 dark:text-slate-500'}`} />
-                <span>{tab.label}</span>
+                <IconComponent className={`h-4.5 w-4.5 shrink-0 ${isSelected ? '' : 'text-stone-400 dark:text-slate-500'}`} />
+                <span className="min-w-0 whitespace-normal leading-snug">{tab.label}</span>
               </button>
             );
           })}
         </nav>
 
         {/* Content Box */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <main className="mx-auto w-full max-w-7xl flex-1 p-3 sm:p-5 md:p-6 xl:p-8">
           {children}
         </main>
       </div>

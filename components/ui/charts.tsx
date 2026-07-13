@@ -232,28 +232,49 @@ export interface DonutChartCardProps {
 
 export function DonutChartCard({ title, subtitle, action, data, height = 280, className }: DonutChartCardProps) {
   return (
-    <ChartCardShell title={title} subtitle={subtitle} action={action} className={className} height={height}>
-      <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-        <Tooltip
-          contentStyle={tooltipContentStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-        <Pie
-          data={data}
-          dataKey="value"
-          nameKey="label"
-          innerRadius="60%"
-          outerRadius="85%"
-          paddingAngle={2}
-          strokeWidth={2}
-        >
-          {data.map((d, i) => (
-            <Cell key={d.label} fill={d.color ?? defaultColor(i)} stroke="var(--chart-tooltip-bg)" />
-          ))}
-        </Pie>
-      </PieChart>
-    </ChartCardShell>
+    <Card className={className}>
+      <CardHeader title={title} subtitle={subtitle} action={action} />
+      <CardBody>
+        <div className={cn(CHART_VARS_CLASSNAME, 'space-y-4')}>
+          <div style={{ height }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                <Tooltip
+                  contentStyle={tooltipContentStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                />
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="label"
+                  innerRadius="60%"
+                  outerRadius="85%"
+                  paddingAngle={2}
+                  strokeWidth={2}
+                >
+                  {data.map((d, i) => (
+                    <Cell key={d.label} fill={d.color ?? defaultColor(i)} stroke="var(--chart-tooltip-bg)" />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex max-h-[12rem] flex-wrap justify-center gap-2 overflow-y-auto px-1">
+            {data.map((item, index) => (
+              <div key={item.label} className="inline-flex min-w-0 items-center gap-2 rounded-full bg-stone-50 px-3 py-1.5 dark:bg-slate-950/50">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: item.color ?? defaultColor(index) }}
+                />
+                <span className="max-w-[10rem] truncate text-xs font-bold text-stone-700 dark:text-slate-200">{item.label}</span>
+                <span className="text-xs font-semibold text-stone-400 dark:text-slate-500">{item.value.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardBody>
+    </Card>
   );
 }

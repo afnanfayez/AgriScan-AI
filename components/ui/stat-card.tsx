@@ -56,7 +56,7 @@ export function StatCard({ label, value, delta, tone = 'neutral', icon: Icon, cl
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block text-xs font-medium text-stone-500 dark:text-slate-400">{label}</span>
-          <span className="mt-2 block truncate text-2xl font-semibold tracking-tight text-stone-950 dark:text-slate-50">
+          <span className="mt-2 block truncate text-xl font-semibold tracking-tight text-stone-950 sm:text-2xl dark:text-slate-50">
             {value}
           </span>
           {delta && Trend && (
@@ -82,5 +82,5 @@ export interface StatCardGridProps {
 }
 
 export function StatCardGrid({ children, className }: StatCardGridProps) {
-  return <div className={cn('grid grid-cols-2 gap-4 xl:grid-cols-4', className)}>{children}</div>;
+  return <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4', className)}>{children}</div>;
 }

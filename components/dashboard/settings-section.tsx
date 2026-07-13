@@ -116,7 +116,7 @@ function OrganizationSettingsCard() {
           <button
             type="submit"
             disabled={isSaving || !orgId}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto dark:bg-emerald-500 dark:hover:bg-emerald-400"
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             <span>Save</span>
@@ -187,9 +187,9 @@ export default function SettingsSection({
             Update your profile, operation location, dashboard role, and measurement preferences.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+        <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           <Settings className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <span>{user.email}</span>
+          <span className="min-w-0 truncate">{user.email}</span>
         </div>
       </div>
 
@@ -206,7 +206,7 @@ export default function SettingsSection({
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
           <div className="mb-6 flex flex-col gap-4 rounded-xl border border-stone-100 bg-stone-50 p-4 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center">
             <img
@@ -224,8 +224,8 @@ export default function SettingsSection({
               <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-slate-400">
                 This image is saved to your profile and shown in the dashboard header for every role.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 sm:w-auto dark:bg-emerald-500 dark:hover:bg-emerald-400">
                   <Camera className="h-4 w-4" />
                   <span>Upload Photo</span>
                   <input type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
@@ -234,7 +234,7 @@ export default function SettingsSection({
                   <button
                     type="button"
                     onClick={() => onAvatarChange(user.avatarUrl || '')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 transition hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 transition hover:bg-stone-50 sm:w-auto dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     <X className="h-4 w-4" />
                     <span>Reset</span>
@@ -288,7 +288,7 @@ export default function SettingsSection({
                   key={option.value}
                   type="button"
                   onClick={() => onUnitsChange(option.value)}
-                  className={`rounded-xl border p-4 text-left transition ${
+                  className={`min-w-0 rounded-xl border p-4 text-left transition ${
                     settingsUnits === option.value
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-sm dark:border-emerald-400/60 dark:bg-emerald-500/10 dark:text-emerald-100'
                       : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300 hover:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:bg-slate-900 dark:hover:text-slate-100'
@@ -355,7 +355,7 @@ export default function SettingsSection({
           </button>
         </section>
 
-        <aside className="self-start rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <aside className="self-start rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-bold text-stone-950 dark:text-slate-50">Current Workspace</h2>
           <div className="mt-4 space-y-3">
             {accountTypes.map((type) => (
