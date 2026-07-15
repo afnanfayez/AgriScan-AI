@@ -58,18 +58,33 @@ async function getOrCreateStripeCustomerId(user: SupabaseUserProfile): Promise<s
   return customer.id;
 }
 
-export async function createCheckoutSession(user: SupabaseUserProfile, plan: 'Pro' | 'Enterprise'): Promise<string> {
+export async function createCheckoutSession(
+  user: SupabaseUserProfile,
+  plan: 'Pro' | 'Enterprise',
+  theme: 'light' | 'dark' = 'light',
+  cancelPath = '/dashboard?checkout=cancelled',
+  appUrl = APP_URL
+): Promise<string> {
   const stripe = getStripeClient();
   const customerId = await getOrCreateStripeCustomerId(user);
+  const isDark = theme === 'dark';
+  const baseUrl = appUrl.replace(/\/$/, '');
+  const cancelUrl = `${baseUrl}${cancelPath}`;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
     client_reference_id: user.id,
     line_items: [{ price: priceIdForPlan(plan), quantity: 1 }],
+    branding_settings: {
+      background_color: isDark ? '#020617' : '#ffffff',
+      button_color: '#059669',
+      display_name: 'Agriscan AI',
+      border_style: 'rounded',
+    },
     subscription_data: { metadata: { supabase_user_id: user.id } },
-    success_url: `${APP_URL}/dashboard?checkout=success`,
-    cancel_url: `${APP_URL}/dashboard?checkout=cancelled`,
+    success_url: `${baseUrl}/dashboard?checkout=success`,
+    cancel_url: cancelUrl,
   });
 
   if (!session.url) {
