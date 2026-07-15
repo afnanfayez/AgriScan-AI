@@ -12,6 +12,10 @@ interface OnboardChoices {
   firstFarmName?: string;
 }
 
+interface CheckoutOptions {
+  cancelPath?: string;
+}
+
 interface AuthContextType {
   user: any | null;
   isLoading: boolean;
@@ -27,7 +31,7 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string, accountType: AccountType) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   onboard: (choices: OnboardChoices) => Promise<{ success: boolean; error?: string }>;
-  startCheckout: (plan: 'Pro' | 'Enterprise') => Promise<{ success: boolean; url?: string; error?: string }>;
+  startCheckout: (plan: 'Pro' | 'Enterprise', options?: CheckoutOptions) => Promise<{ success: boolean; url?: string; error?: string }>;
   openBillingPortal: () => Promise<{ success: boolean; url?: string; error?: string }>;
   refreshAll: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
@@ -166,12 +170,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const startCheckout = async (plan: 'Pro' | 'Enterprise') => {
+  const startCheckout = async (plan: 'Pro' | 'Enterprise', options: CheckoutOptions = {}) => {
     try {
+      const storedTheme = typeof window !== 'undefined' ? localStorage.getItem('agriscan.theme') : null;
+      const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const checkoutTheme = storedTheme ? storedTheme : prefersDark ? 'dark' : 'light';
+
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, theme: checkoutTheme, cancelPath: options.cancelPath }),
       });
       const data = await res.json();
       if (res.ok && data.success) {

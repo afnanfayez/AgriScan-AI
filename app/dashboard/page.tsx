@@ -82,6 +82,8 @@ const ROUTE_TABS: Record<string, string> = Object.fromEntries(
   Object.entries(TAB_ROUTES).map(([tab, path]) => [path.toLowerCase(), tab])
 );
 
+const CHECKOUT_REDIRECT_STORAGE_KEY = 'agriscan.checkoutRedirect';
+
 function DashboardContent() {
   const {
     user,
@@ -133,6 +135,9 @@ function DashboardContent() {
     const checkoutStatus = searchParams?.get('checkout');
     if (!checkoutStatus) return;
 
+    sessionStorage.removeItem(CHECKOUT_REDIRECT_STORAGE_KEY);
+    setIsRedirectingToCheckout(false);
+
     if (checkoutStatus === 'success') {
       refreshAll();
     }
@@ -149,6 +154,10 @@ function DashboardContent() {
   const [onboardUnits, setOnboardUnits] = useState<'metric' | 'imperial'>('metric');
   const [onboardPlan, setOnboardPlan] = useState<'Free' | 'Pro' | 'Enterprise'>('Free');
   const [onboardFarmName, setOnboardFarmName] = useState('');
+  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem(CHECKOUT_REDIRECT_STORAGE_KEY) === '1';
+  });
 
   // Notifications Drawer
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
@@ -495,8 +504,14 @@ function DashboardContent() {
   // Onboard Handler. `plan` is never sent here — Free is the DB default for
   // every new account, and Pro/Enterprise can only be granted by the Stripe
   // webhook once a real payment completes (see the checkout redirect below).
-  const handleOnboardSubmit = async () => {
+  const handleOnboardSubmit = async (selectedPlan = onboardPlan) => {
     setIsSubmitting(true);
+    const isPaidPlan = selectedPlan !== 'Free';
+    if (isPaidPlan) {
+      sessionStorage.setItem(CHECKOUT_REDIRECT_STORAGE_KEY, '1');
+      setIsRedirectingToCheckout(true);
+    }
+    setOnboardPlan(selectedPlan);
     const res = await onboard({
       accountType: user?.accountType,
       location: onboardLocation,
@@ -506,11 +521,13 @@ function DashboardContent() {
 
     if (!res.success) {
       setAuthError(res.error || 'Onboarding saving failed');
+      sessionStorage.removeItem(CHECKOUT_REDIRECT_STORAGE_KEY);
+      setIsRedirectingToCheckout(false);
       setIsSubmitting(false);
       return;
     }
 
-    if (onboardPlan === 'Free') {
+    if (!isPaidPlan) {
       await refreshAll();
       setActiveTab('dashboard');
       pushWorkspaceUrl('/dashboard');
@@ -520,12 +537,15 @@ function DashboardContent() {
 
     // Pro/Enterprise: hand off to Stripe Checkout. The webhook upgrades the
     // plan once payment succeeds and the user lands back on ?checkout=success.
-    const checkout = await startCheckout(onboardPlan);
+    const checkout = await startCheckout(selectedPlan);
     if (checkout.success && checkout.url) {
-      window.location.href = checkout.url;
+      sessionStorage.removeItem(CHECKOUT_REDIRECT_STORAGE_KEY);
+      window.location.replace(checkout.url);
       return;
     }
     setAuthError(checkout.error || 'Could not start checkout. Please try again.');
+    sessionStorage.removeItem(CHECKOUT_REDIRECT_STORAGE_KEY);
+    setIsRedirectingToCheckout(false);
     setIsSubmitting(false);
   };
 
@@ -1063,7 +1083,7 @@ function DashboardContent() {
   const handleUpgrade = async (plan: 'Pro' | 'Enterprise') => {
     setBillingError('');
     setBillingActionLoading(true);
-    const res = await startCheckout(plan);
+    const res = await startCheckout(plan, { cancelPath: '/Settings?checkout=cancelled' });
     if (res.success && res.url) {
       window.location.href = res.url;
       return;
@@ -1100,6 +1120,15 @@ function DashboardContent() {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-stone-50 text-stone-800">
         <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
+
+  if (isRedirectingToCheckout) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-stone-50 text-stone-800 dark:bg-slate-950 dark:text-slate-100">
+        <Loader2 className="h-10 w-10 animate-spin text-emerald-600 dark:text-emerald-400" />
+        <p className="mt-4 text-sm font-semibold tracking-tight">Opening secure Stripe Checkout...</p>
       </div>
     );
   }
@@ -1214,14 +1243,24 @@ function DashboardContent() {
                 ].map((plan) => (
                   <button
                     key={plan.tier}
-                    onClick={() => setOnboardPlan(plan.tier as any)}
+                    onClick={() => {
+                      const selectedPlan = plan.tier as 'Free' | 'Pro' | 'Enterprise';
+                      if (selectedPlan === 'Free') {
+                        setOnboardPlan(selectedPlan);
+                        return;
+                      }
+                      void handleOnboardSubmit(selectedPlan);
+                    }}
+                    disabled={isSubmitting}
                     className={`w-full text-left p-4 rounded-xl border font-sans cursor-pointer transition-all flex items-start justify-between ${onboardPlan === plan.tier ? 'border-emerald-600 bg-emerald-50/30 dark:border-emerald-500 dark:bg-emerald-500/5' : 'border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-stone-50 dark:hover:bg-slate-900'}`}
                   >
                     <div>
                       <span className="font-semibold text-stone-900 dark:text-slate-100 block font-mono">{plan.tier} Plan</span>
                       <span className="text-xs text-stone-500 dark:text-slate-400 mt-1 block">{plan.desc}</span>
                     </div>
-                    <span className="text-sm font-bold text-emerald-800 dark:text-emerald-450 font-mono">{plan.price}</span>
+                    <span className="text-sm font-bold text-emerald-800 dark:text-emerald-450 font-mono">
+                      {isSubmitting && onboardPlan === plan.tier && plan.tier !== 'Free' ? <Loader2 className="h-4 w-4 animate-spin" /> : plan.price}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1234,7 +1273,7 @@ function DashboardContent() {
                   Back
                 </button>
                 <button
-                  onClick={handleOnboardSubmit}
+                  onClick={() => void handleOnboardSubmit()}
                   disabled={isSubmitting}
                   className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 cursor-pointer flex items-center space-x-2"
                 >
@@ -2777,6 +2816,3 @@ export default function DashboardPage() {
     </Suspense>
   );
 }
-
-
-
