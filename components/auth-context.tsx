@@ -57,19 +57,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const refreshAll = async () => {
+  const refreshAll = async (signal?: AbortSignal) => {
     try {
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await fetch('/api/auth/me', { signal });
       const meData = await meRes.json();
+
+      if (signal?.aborted) return;
       
       if (meData.authenticated && meData.user) {
         setUser(meData.user);
         
         // Fetch child resources
         const [farmsRes, plantsRes, notifsRes] = await Promise.all([
-          fetch('/api/farms'),
-          fetch('/api/plants'),
-          fetch('/api/notifications')
+          fetch('/api/farms', { signal }),
+          fetch('/api/plants', { signal }),
+          fetch('/api/notifications', { signal })
         ]);
 
         const [farmsData, plantsData, notifsData] = await Promise.all([
@@ -77,6 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           plantsRes.json(),
           notifsRes.json()
         ]);
+
+        if (signal?.aborted) return;
 
         if (farmsData.success) setFarms(farmsData.farms);
         if (plantsData.success) setPlants(plantsData.plants);
@@ -88,16 +92,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setNotifications([]);
       }
     } catch (error) {
-      console.error('Failed to refresh data:', error);
+      // React Strict Mode mounts effects twice in development. The cleanup for
+      // the first mount intentionally aborts its in-flight refresh.
+      if (signal?.aborted) return;
+
+      // A temporary connection loss should not trigger Next.js's development
+      // error overlay. Keep the current state and allow the next refresh to
+      // recover normally.
+      console.warn('Unable to refresh account data:', error);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    setTimeout(() => {
-      refreshAll();
+    const controller = new AbortController();
+    const refreshTimer = window.setTimeout(() => {
+      void refreshAll(controller.signal);
     }, 0);
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      controller.abort();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
