@@ -170,7 +170,7 @@ export async function runGeminiPlantAnalysis(
           },
         });
         break;
-      } catch (modelError) {
+      } catch (modelError: any) {
         lastModelError = modelError;
         const quotaError = isGeminiQuotaError(modelError);
         console.error('Gemini model request failed', {
