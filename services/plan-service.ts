@@ -14,15 +14,15 @@ export type UsageKind = 'scan' | 'field_scan' | 'batch_scan';
 export const PLAN_LIMITS: Record<Plan, { monthlyScans: number | null; modelChain: string[] }> = {
   Free: {
     monthlyScans: 5,
-    modelChain: ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
+    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
   },
   Pro: {
     monthlyScans: null,
-    modelChain: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
+    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
   },
   Enterprise: {
     monthlyScans: null,
-    modelChain: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'],
+    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
   },
 };
 
