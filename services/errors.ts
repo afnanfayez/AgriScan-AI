@@ -3,10 +3,18 @@
 // re-implementing per-case logic in every catch block.
 export class ServiceError extends Error {
   status: number;
+  code?: string;
+  retryAfter?: number;
 
-  constructor(message: string, status: number = 400) {
+  constructor(
+    message: string,
+    status: number = 400,
+    options: { code?: string; retryAfter?: number } = {}
+  ) {
     super(message);
     this.name = 'ServiceError';
     this.status = status;
+    this.code = options.code;
+    this.retryAfter = options.retryAfter;
   }
 }

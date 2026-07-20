@@ -33,6 +33,15 @@ function isGeminiQuotaError(error: any): boolean {
   );
 }
 
+function getRetryAfterSeconds(error: any): number {
+  const retryAfter = Number(error?.headers?.get?.('retry-after') ?? error?.headers?.['retry-after']);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.ceil(retryAfter);
+
+  const detail = getGeminiErrorText(error);
+  const retryDelay = detail.match(/(?:retry(?:Delay| after)?)[^0-9]*(\d+(?:\.\d+)?)\s*s/i);
+  return retryDelay ? Math.max(1, Math.ceil(Number(retryDelay[1]))) : 17;
+}
+
 /**
  * Shared Gemini plant-image analysis call, used by the single-plant Plant
  * Doctor scan (services/scans-service.ts) as well as Commercial Farmer batch
@@ -148,6 +157,8 @@ export async function runGeminiPlantAnalysis(
 
     let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
     let lastModelError: any = null;
+    let hadQuotaError = false;
+    let retryAfter = 17;
     for (const model of models) {
       try {
         response = await ai.models.generateContent({
@@ -161,19 +172,30 @@ export async function runGeminiPlantAnalysis(
         break;
       } catch (modelError) {
         lastModelError = modelError;
-        if (isGeminiQuotaError(modelError)) {
-          const detail = getGeminiErrorText(modelError);
-          throw new ServiceError(
-            `Gemini quota or rate limit exceeded. Please wait a moment and try again, reduce the number of uploaded images, or enable billing/increase quota for your Google AI Studio project. Last error: ${detail}`,
-            429
-          );
+        const quotaError = isGeminiQuotaError(modelError);
+        console.error('Gemini model request failed', {
+          model,
+          code: modelError?.status ?? modelError?.error?.code ?? 'unknown',
+          reason: quotaError ? 'quota_exhausted' : 'model_request_failed',
+          timestamp: new Date().toISOString(),
+          detail: getGeminiErrorText(modelError),
+        });
+        if (quotaError) {
+          hadQuotaError = true;
+          retryAfter = Math.max(retryAfter, getRetryAfterSeconds(modelError));
         }
-        console.warn(`Gemini model ${model} failed, trying fallback if available.`, modelError);
       }
     }
 
     if (!response) {
       const detail = getGeminiErrorText(lastModelError);
+      if (hadQuotaError) {
+        throw new ServiceError(
+          'AI analysis is temporarily unavailable because our API quota limit was reached. Please try again later.',
+          429,
+          { code: 'quota_exhausted', retryAfter }
+        );
+      }
       throw new ServiceError(
         `Gemini model is unavailable or misconfigured. Set GEMINI_MODEL to a model available for your API key, such as gemini-2.5-flash. Last error: ${detail}`,
         502
