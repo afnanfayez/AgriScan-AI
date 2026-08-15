@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 import { resendVerificationCode } from '@/services/auth/registration';
 import { ServiceError } from '@/services/errors';
 
@@ -11,7 +12,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email is required to resend verification code.' }, { status: 400 });
     }
 
-    await resendVerificationCode(email);
+    const supabase = await createClient();
+    await resendVerificationCode(supabase, email);
 
     return NextResponse.json({ success: true, message: 'A new verification code has been sent to your email.' });
   } catch (error: any) {

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 import { verifyResetCode } from '@/services/auth/password-reset';
 import { ServiceError } from '@/services/errors';
 
 /**
  * POST /api/auth/reset-password/verify
  * Step 2 of the password reset flow.
- * Validates the OTP code only — does NOT change the password yet.
- * Returns a short-lived verification token that the confirm step will use.
+ *
+ * Validates the OTP only - it does not change the password. On success Supabase
+ * establishes a recovery session in cookies, and that session is what
+ * authorizes step 3. Nothing is handed back to the client to replay.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -16,11 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and code are required.' }, { status: 400 });
     }
 
-    const { verifiedToken } = await verifyResetCode(email, code);
+    const supabase = await createClient();
+    await verifyResetCode(supabase, email, code);
 
     return NextResponse.json({
       success: true,
-      verifiedToken,
       message: 'Code verified. You may now set a new password.',
     });
   } catch (error: any) {

@@ -39,8 +39,8 @@ interface AuthContextType {
   verifyEmail: (code: string, email?: string) => Promise<{ success: boolean; error?: string }>;
   resendVerificationCode: (email?: string) => Promise<{ success: boolean; error?: string; devCode?: string }>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
-  verifyResetCode: (email: string, code: string) => Promise<{ success: boolean; error?: string; verifiedToken?: string }>;
-  confirmPasswordReset: (email: string, verifiedToken: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  verifyResetCode: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
+  confirmPasswordReset: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -301,7 +301,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  /** Step 2: validate OTP only — returns verifiedToken for confirm step */
+  /** Step 2: validate the OTP only. On success Supabase sets a recovery session
+   *  cookie, which is what authorizes step 3 — nothing is returned to replay. */
   const verifyResetCode = async (email: string, code: string) => {
     try {
       const res = await fetch('/api/auth/reset-password/verify', {
@@ -311,7 +312,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        return { success: true, verifiedToken: data.verifiedToken };
+        return { success: true };
       }
       return { success: false, error: data.error || 'Invalid or expired code' };
     } catch (err: any) {
@@ -319,13 +320,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  /** Step 3: set new password using verifiedToken — auto-logs user in */
-  const confirmPasswordReset = async (email: string, verifiedToken: string, newPassword: string) => {
+  /** Step 3: set the new password on the recovery session — auto-logs user in */
+  const confirmPasswordReset = async (newPassword: string) => {
     try {
       const res = await fetch('/api/auth/reset-password/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, verifiedToken, newPassword }),
+        body: JSON.stringify({ newPassword }),
       });
       const data = await res.json();
       if (res.ok && data.success) {

@@ -1,0 +1,34 @@
+-- =============================================================================
+-- Auth emails migration: drop the pending_signups table
+-- =============================================================================
+-- Run this in the Supabase SQL Editor AFTER deploying the code that moves
+-- signup verification and password reset onto Supabase Auth's own email OTP.
+--
+-- Why the table can go:
+--   The old signup flow generated its own 6-digit code, held the new account's
+--   details in public.pending_signups with the password reversibly encrypted,
+--   and only created the auth user once the code was entered. Supabase Auth now
+--   creates the account immediately as unconfirmed and sends the code itself,
+--   so nothing needs to be parked anywhere and no password sits at rest.
+--
+-- SAFETY: this table only ever held in-flight registrations (15 minute TTL).
+-- Dropping it cannot affect any account that completed signup. Anyone mid-signup
+-- when you run this simply signs up again.
+--
+-- Check what you would be discarding first:
+--   select count(*) from public.pending_signups where expires_at > now();
+-- =============================================================================
+
+-- The table carried no named RLS policies - supabase_rls_patch.sql secured it
+-- with REVOKEs only - so the table drop is the whole change.
+drop table if exists public.pending_signups;
+
+-- =============================================================================
+-- Nothing else changes. In particular the on_auth_user_created trigger stays
+-- exactly as it is: it now fires when Supabase creates the *unconfirmed* user
+-- at signup rather than when the app created a pre-confirmed one, so a
+-- public.profiles row exists slightly earlier in the flow than before. The
+-- application accounts for this by treating "account already exists" as
+-- "a CONFIRMED auth user exists" rather than "a profile row exists"
+-- (see services/auth/registration.ts).
+-- =============================================================================

@@ -1,64 +1,100 @@
 import { getSupabaseAdminClient } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/server';
-import { sendVerificationEmail } from '@/lib/email';
-import { encryptSecret, decryptSecret } from '@/lib/crypto';
 import type { AccountType } from '@/types/domain';
 import { ServiceError } from '../errors';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
-export async function signup(input: {
-  email: string;
-  password: string;
-  name: string;
-  accountType?: AccountType;
-}): Promise<{ email: string }> {
-  const { email, password, name, accountType } = input;
-  const adminClient = getSupabaseAdminClient();
+/**
+ * Signup verification runs on Supabase Auth's own email OTP rather than an
+ * app-generated code delivered over our own SMTP transport. Supabase sends the
+ * "Confirm signup" template, which must contain {{ .Token }} to render a
+ * 6-digit code (see docs/auth-emails.md).
+ *
+ * Consequences of that change, both deliberate:
+ *  - The account row is created immediately as unconfirmed instead of being
+ *    parked in a `pending_signups` table, so we no longer hold a reversibly
+ *    encrypted password at rest waiting for the user to type a code.
+ *  - The `on_auth_user_created` trigger therefore creates the public.profiles
+ *    row at signup time, not at verification time - so "does an account exist"
+ *    has to ask whether the auth user is *confirmed*, not whether a profile row
+ *    is present.
+ */
 
-  // 1. Check if a confirmed account already exists for this email
-  const { data: existingProfile } = await adminClient
+/** Resolves the auth user behind an email, or null. Uses the indexed profiles
+ *  table rather than paginating auth.admin.listUsers(). */
+async function findAuthUserByEmail(
+  adminClient: ReturnType<typeof getSupabaseAdminClient>,
+  email: string
+) {
+  const { data: profile } = await adminClient
     .from('profiles')
     .select('id')
-    .eq('email', email.toLowerCase())
+    .eq('email', email)
     .maybeSingle();
-  if (existingProfile) {
+
+  if (!profile) return null;
+
+  const { data, error } = await adminClient.auth.admin.getUserById(profile.id);
+  if (error || !data?.user) return null;
+  return data.user;
+}
+
+/** Supabase surfaces send-rate limiting as a 429; everything else is ours to phrase. */
+function describeAuthError(error: { message?: string; status?: number } | null, fallback: string): ServiceError {
+  const message = error?.message || '';
+  if (error?.status === 429 || /rate limit/i.test(message)) {
+    return new ServiceError(
+      'Too many email requests. Please wait a minute before trying again.',
+      429,
+      { code: 'email_rate_limited' }
+    );
+  }
+  return new ServiceError(message || fallback, error?.status && error.status < 500 ? error.status : 500);
+}
+
+export async function signup(
+  supabase: SupabaseClient,
+  input: {
+    email: string;
+    password: string;
+    name: string;
+    accountType?: AccountType;
+  }
+): Promise<{ email: string }> {
+  const email = input.email.toLowerCase().trim();
+  const adminClient = getSupabaseAdminClient();
+
+  // Only a *confirmed* account blocks signup. An unconfirmed one means the user
+  // abandoned the flow earlier; signUp below resends their code rather than
+  // leaving them permanently stuck on "email already exists".
+  const existing = await findAuthUserByEmail(adminClient, email);
+  if (existing?.email_confirmed_at) {
     throw new ServiceError('An account with this email already exists.', 400);
   }
 
   const avatarUrl = `https://picsum.photos/seed/${email.replace(/[^a-zA-Z0-9]/g, '')}/150/150`;
 
-  // 2. Generate 6-digit OTP code
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const codeExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+  const { error } = await supabase.auth.signUp({
+    email,
+    password: input.password,
+    options: {
+      // Read by the on_auth_user_created trigger to populate public.profiles.
+      data: {
+        name: input.name,
+        account_type: input.accountType || 'Gardener',
+        avatar_url: avatarUrl,
+        is_verified: false,
+      },
+    },
+  });
 
-  // 3. Send OTP email first — if SMTP fails, we don't save anything in DB
-  const emailSent = await sendVerificationEmail(email.toLowerCase(), name, verificationCode);
-  if (!emailSent) {
-    console.error(`Verification email failed for ${email}.`);
-    throw new ServiceError('Failed to send verification email. Please check your SMTP configuration.', 500);
+  if (error) {
+    console.error('Signup failed:', { status: error.status, message: error.message });
+    throw describeAuthError(error, 'Failed to start signup. Please try again.');
   }
 
-  // 4. Save/Upsert temporary details in pending_signups table
-  // This table holds registration details until the user confirms the code.
-  const { error: dbError } = await adminClient
-    .from('pending_signups')
-    .upsert({
-      email: email.toLowerCase(),
-      password: encryptSecret(password),
-      name,
-      account_type: accountType || 'Gardener',
-      avatar_url: avatarUrl,
-      code: verificationCode,
-      expires_at: codeExpiry,
-    }, { onConflict: 'email' });
-
-  if (dbError) {
-    console.error('Failed to store pending signup:', dbError);
-    throw new ServiceError('Failed to initiate signup. Please run the updated SQL schema.', 500);
-  }
-
-  return { email: email.toLowerCase() };
+  return { email };
 }
 
 export interface VerifyEmailResult {
@@ -79,147 +115,93 @@ export async function verifyEmail(
   email: string
 ): Promise<VerifyEmailResult> {
   const normalizedEmail = email.toLowerCase().trim();
-  const adminClient = getSupabaseAdminClient();
 
-  // Resolve user registration details from pending_signups table
-  const { data: pendingData, error: fetchError } = await adminClient
-    .from('pending_signups')
-    .select('*')
-    .eq('email', normalizedEmail)
-    .maybeSingle();
-
-  if (fetchError || !pendingData) {
-    console.error('Fetch pending error:', fetchError);
-    throw new ServiceError('No pending registration found for this email. Please sign up again.', 400);
-  }
-
-  // Verify OTP code
-  if (code.trim() !== pendingData.code) {
-    throw new ServiceError('Invalid verification code. Please try again.', 400);
-  }
-
-  // Verify expiration
-  if (new Date() > new Date(pendingData.expires_at)) {
-    throw new ServiceError('Verification code has expired. Please sign up again.', 400);
-  }
-
-  const plainPassword = decryptSecret(pendingData.password);
-
-  // ── Create user in Supabase Auth as auto-confirmed ────────────────────────
-  const { data: createdUser, error: createError } = await adminClient.auth.admin.createUser({
+  // Consumes the OTP and establishes the session cookie in one step - this
+  // replaces the previous "look up pending row, compare strings, then create
+  // the user and sign in with the decrypted password" sequence.
+  const { data, error } = await supabase.auth.verifyOtp({
     email: normalizedEmail,
-    password: plainPassword,
-    email_confirm: true, // Automatically confirms the email in auth.users
-    user_metadata: {
-      name: pendingData.name,
-      account_type: pendingData.account_type,
-      avatar_url: pendingData.avatar_url,
-      is_verified: true, // Marked as verified
-    },
+    token: code.trim(),
+    type: 'signup',
   });
 
-  if (createError || !createdUser?.user) {
-    console.error('Failed to create verified user:', createError);
-    throw new ServiceError(createError?.message || 'Failed to create user account.', 500);
+  if (error || !data?.user || !data?.session) {
+    console.error('Signup OTP verification failed:', { status: error?.status, message: error?.message });
+    if (error?.status === 429 || /rate limit/i.test(error?.message || '')) {
+      throw describeAuthError(error, 'Verification failed.');
+    }
+    throw new ServiceError(
+      /expired/i.test(error?.message || '')
+        ? 'Verification code has expired. Request a new one.'
+        : 'Invalid verification code. Please try again.',
+      400
+    );
   }
 
-  const userId = createdUser.user.id;
+  const user = data.user;
+  const meta = user.user_metadata || {};
+  const accountType: AccountType = meta.account_type || 'Gardener';
+  const name: string = meta.name || normalizedEmail.split('@')[0];
+  const avatarUrl: string = meta.avatar_url || '';
 
-  // ── Delete pending signup record ──────────────────────────────────────────
-  await adminClient
-    .from('pending_signups')
-    .delete()
-    .eq('email', normalizedEmail);
+  const adminClient = getSupabaseAdminClient();
 
-  // ── Create database records (farms, notifications) ───────────────────────
-  const accountType = pendingData.account_type || 'Gardener';
-  const userName = pendingData.name || normalizedEmail.split('@')[0];
+  await adminClient.auth.admin.updateUserById(user.id, {
+    user_metadata: { ...meta, is_verified: true },
+  });
 
-  // Create default farm for relevant account types
+  // Default farm for account types that need one. Safe against double-runs:
+  // the OTP is consumed above, so a replayed request never reaches this.
   if (['Farmer', 'Nursery'].includes(accountType)) {
     const { error: farmError } = await adminClient
       .from('farms')
-      .insert({
-        name: `${userName}'s Primary Zone`,
-        user_id: userId,
-        zone_count: 3,
-      });
+      .insert({ name: `${name}'s Primary Zone`, user_id: user.id, zone_count: 3 });
     if (farmError) console.error('Error creating default farm after verify:', farmError);
   }
 
-  // Create welcome notification
-  const { error: notifError } = await adminClient
-    .from('notifications')
-    .insert({
-      user_id: userId,
-      title: 'Welcome to AgriScan AI! 🌱',
-      message: 'Your email is verified. Get started by scanning your first plant leaf or setting up your fields.',
-      category: 'System',
-      read: false,
-    });
+  const { error: notifError } = await adminClient.from('notifications').insert({
+    user_id: user.id,
+    title: 'Welcome to AgriScan AI! 🌱',
+    message:
+      'Your email is verified. Get started by scanning your first plant leaf or setting up your fields.',
+    category: 'System',
+    read: false,
+  });
   if (notifError) console.error('Error creating welcome notification:', notifError);
 
-  // ── Log the user in so a Supabase session cookie is set ──────────────────
-  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-    email: normalizedEmail,
-    password: plainPassword,
-  });
-
-  if (signInError || !signInData?.session) {
-    console.error('Auto login after verify failed:', signInError);
-    throw new ServiceError('Account verified but session generation failed. Please log in manually.', 500);
-  }
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('location, units, plan')
+    .eq('id', user.id)
+    .maybeSingle();
 
   return {
-    id: userId,
+    id: user.id,
     email: normalizedEmail,
-    name: pendingData.name,
-    avatarUrl: pendingData.avatar_url,
-    accountType: pendingData.account_type,
-    location: '',
-    units: 'metric',
-    plan: 'Free',
+    name,
+    avatarUrl,
+    accountType,
+    location: profile?.location || '',
+    units: profile?.units || 'metric',
+    plan: profile?.plan || 'Free',
     isVerified: true,
   };
 }
 
-export async function resendVerificationCode(email: string): Promise<void> {
-  const adminClient = getSupabaseAdminClient();
+export async function resendVerificationCode(supabase: SupabaseClient, email: string): Promise<void> {
+  const normalizedEmail = email.toLowerCase().trim();
 
-  // Retrieve the user from pending_signups table
-  const { data: pendingData, error: fetchError } = await adminClient
-    .from('pending_signups')
-    .select('*')
-    .eq('email', email)
-    .maybeSingle();
+  const { error } = await supabase.auth.resend({ type: 'signup', email: normalizedEmail });
 
-  if (fetchError || !pendingData) {
-    throw new ServiceError('No pending registration found for this email. Please sign up first.', 400);
-  }
-
-  // Generate a new 6-digit code
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const codeExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
-
-  // Update the pending signup record with the new code and expiry
-  const { error: updateError } = await adminClient
-    .from('pending_signups')
-    .update({
-      code: verificationCode,
-      expires_at: codeExpiry,
-    })
-    .eq('email', email);
-
-  if (updateError) {
-    console.error('Failed to update resend code:', updateError);
-    throw new ServiceError('Failed to generate new verification code.', 500);
-  }
-
-  // Send the verification email
-  const userName = pendingData.name || email.split('@')[0];
-  const emailSent = await sendVerificationEmail(email, userName, verificationCode);
-  if (!emailSent) {
-    console.error(`Resend verification email failed for ${email}. Code: ${verificationCode}`);
-    throw new ServiceError('Failed to send verification email. Please check your SMTP configuration.', 500);
+  if (error) {
+    console.error('Resend verification failed:', { status: error.status, message: error.message });
+    if (error.status === 429 || /rate limit/i.test(error.message || '')) {
+      throw describeAuthError(error, 'Failed to resend the verification code.');
+    }
+    // Supabase rejects a resend when there is nothing pending for the address.
+    throw new ServiceError(
+      'No pending registration found for this email. Please sign up first.',
+      400
+    );
   }
 }

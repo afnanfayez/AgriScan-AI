@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 import { signup } from '@/services/auth/registration';
 import { ServiceError } from '@/services/errors';
 
@@ -14,7 +15,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
     }
 
-    const result = await signup({ email, password, name, accountType });
+    const supabase = await createClient();
+    const result = await signup(supabase, { email, password, name, accountType });
 
     return NextResponse.json({
       success: true,
