@@ -108,7 +108,7 @@ Plan upgrades are handled by Stripe Checkout. Paid access is granted only after 
 | Billing           | Stripe Checkout, Billing Portal, Webhooks      |
 | Maps and charts   | Leaflet, React Leaflet, Recharts               |
 | Reports           | CSV, ExcelJS, jsPDF                            |
-| Email             | Nodemailer / SMTP                              |
+| Auth email        | Supabase Auth OTP (SMTP + templates configured in the Supabase dashboard) |
 
 ---
 
@@ -163,7 +163,6 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 OPENAI_API_KEY=
-PENDING_SIGNUP_SECRET=
 APP_URL=
 ```
 
@@ -176,13 +175,19 @@ STRIPE_PRICE_ID_PRO=
 STRIPE_PRICE_ID_ENTERPRISE=
 ```
 
-Required for email OTP and password reset delivery:
+### Auth emails
 
-```env
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
-```
+Signup verification codes and password reset codes are sent by **Supabase Auth**,
+so there are no email environment variables. SMTP credentials, the sender
+details, and the email templates are configured in the Supabase dashboard:
+
+- [SMTP settings](https://supabase.com/dashboard/project/_/auth/smtp)
+- [Email templates](https://supabase.com/dashboard/project/_/auth/templates)
+
+Both templates must contain `{{ .Token }}` to render a 6-digit code instead of a
+magic link, and **Confirm email** must be enabled under Sign In / Providers.
+
+Full setup and verification steps: **[docs/auth-emails.md](docs/auth-emails.md)**
 
 Optional:
 
@@ -236,8 +241,13 @@ Run the SQL files in Supabase SQL Editor. For a fresh setup, use this order:
 5. `supabase_remove_agribusiness_role_patch.sql`
 6. `supabase_billing_patch.sql`
 7. `supabase_service_role_grant_fix.sql`
+8. `supabase_auth_emails_patch.sql`
 
 The `supabase_remove_agribusiness_role_patch.sql` migration is important for the current three-role model.
+
+`supabase_auth_emails_patch.sql` drops the `pending_signups` table, which is no
+longer used now that Supabase Auth sends the signup code itself. It only ever
+held in-flight registrations, so dropping it cannot affect a completed account.
 
 ---
 

@@ -33,9 +33,11 @@ function ForgotPasswordForm() {
   const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
-  // Short-lived; kept out of the URL on purpose. Refreshing on the newpass
-  // step loses this and bounces the user back to re-enter the OTP.
-  const [resetVerifiedToken, setResetVerifiedToken] = useState('');
+  // Tracks that the OTP was accepted in THIS tab. The real authorization is the
+  // Supabase recovery session cookie set by /verify; this only stops someone
+  // landing on ?step=newpass directly. Refreshing loses it and bounces the user
+  // back to re-enter the OTP.
+  const [codeVerified, setCodeVerified] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +50,7 @@ function ForgotPasswordForm() {
   }, [resendCooldown]);
 
   React.useEffect(() => {
-    if (step === 'newpass' && !resetVerifiedToken) {
+    if (step === 'newpass' && !codeVerified) {
       router.replace(`/forgot-password?step=otp&email=${encodeURIComponent(resetEmail)}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,8 +100,8 @@ function ForgotPasswordForm() {
     setIsSubmitting(true);
     const res = await verifyResetCode(resetEmail, code);
     setIsSubmitting(false);
-    if (res.success && res.verifiedToken) {
-      setResetVerifiedToken(res.verifiedToken);
+    if (res.success) {
+      setCodeVerified(true);
       setNewPassword('');
       router.push(`/forgot-password?step=newpass&email=${encodeURIComponent(resetEmail)}`);
     } else {
@@ -126,7 +128,7 @@ function ForgotPasswordForm() {
     if (newPassword.length < 8) { setAuthError('Password must be at least 8 characters.'); return; }
     setAuthError('');
     setIsSubmitting(true);
-    const res = await confirmPasswordReset(resetEmail, resetVerifiedToken, newPassword);
+    const res = await confirmPasswordReset(newPassword);
     if (res.success) {
       setAuthSuccess('Password reset successfully! Redirecting to your dashboard…');
       setTimeout(() => {

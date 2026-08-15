@@ -44,21 +44,16 @@ STRIPE_WEBHOOK_SECRET="YOUR_STRIPE_WEBHOOK_SECRET"           # from the Stripe w
 STRIPE_PRICE_ID_PRO="YOUR_STRIPE_PRO_PRICE_ID"                # recurring Price for the Pro product
 STRIPE_PRICE_ID_ENTERPRISE="YOUR_STRIPE_ENTERPRISE_PRICE_ID"  # recurring Price for the Enterprise product
 
-# Gmail SMTP  ─────────────────────────────────────────────────────────────────
-# SMTP_PASS MUST be a Gmail App Password (NOT your regular Gmail password).
-# Get one at: https://myaccount.google.com/apppasswords
-# 2-Step Verification must be enabled on the Google account.
-SMTP_USER="afnan232003@gmail.com"
-SMTP_PASS="YOUR_NEW_16_CHAR_APP_PASSWORD"   # ← paste the app password here
-SMTP_FROM="AgriScan AI <afnan232003@gmail.com>"
+# Auth emails  ────────────────────────────────────────────────────────────────
+# No SMTP variables here any more. Signup verification and password reset codes
+# are sent by Supabase Auth, so SMTP credentials, the sender name/address, and
+# the templates live in the Supabase dashboard instead. See docs/auth-emails.md.
+#
+# If this service was deployed before the migration, clear the stale ones:
+#   gcloud run services update "$SERVICE_NAME" --region "$REGION" \
+#     --remove-env-vars SMTP_USER,SMTP_PASS,SMTP_FROM,PENDING_SIGNUP_SECRET
 
 # ─── VALIDATION ───────────────────────────────────────────────────────────────
-if [[ "$SMTP_PASS" == "YOUR_NEW_16_CHAR_APP_PASSWORD" ]]; then
-  echo "❌  ERROR: You must replace SMTP_PASS with your real Gmail App Password."
-  echo "    Get one at: https://myaccount.google.com/apppasswords"
-  exit 1
-fi
-
 if [[ "$PROJECT_ID" == "YOUR_PROJECT_ID" || "$SERVICE_NAME" == "YOUR_SERVICE_NAME" ]]; then
   echo "❌  ERROR: Fill in PROJECT_ID and SERVICE_NAME before running this script."
   exit 1
@@ -97,10 +92,7 @@ SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY},\
 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY},\
 STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET},\
 STRIPE_PRICE_ID_PRO=${STRIPE_PRICE_ID_PRO},\
-STRIPE_PRICE_ID_ENTERPRISE=${STRIPE_PRICE_ID_ENTERPRISE},\
-SMTP_USER=${SMTP_USER},\
-SMTP_PASS=${SMTP_PASS},\
-SMTP_FROM=${SMTP_FROM}"
+STRIPE_PRICE_ID_ENTERPRISE=${STRIPE_PRICE_ID_ENTERPRISE}"
 
 # ─── VERIFY ───────────────────────────────────────────────────────────────────
 echo ""

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 import { requestPasswordReset } from '@/services/auth/password-reset';
 import { ServiceError } from '@/services/errors';
 
@@ -10,7 +11,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
     }
 
-    const result = await requestPasswordReset(email);
+    const supabase = await createClient();
+    const result = await requestPasswordReset(supabase, email);
 
     return NextResponse.json({
       success: true,
