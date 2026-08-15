@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server';
 import type { SupabaseUserProfile } from '@/lib/auth';
 import type { BatchScan } from '@/types/domain';
 import { ServiceError } from './errors';
-import { runGeminiBatchAnalysis } from './gemini-batch-analysis';
+import { runBatchAnalysis } from './batch-analysis';
 import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -69,7 +69,7 @@ export async function createBatchScan(
 
   await assertWithinQuota(supabase, user, images.length);
 
-  const { totalSamples, healthyCount, infectionPercentage, results } = await runGeminiBatchAnalysis(
+  const { totalSamples, healthyCount, infectionPercentage, results } = await runBatchAnalysis(
     images,
     { plantType: batch.plant_type },
     `batch-scans/${user.id}`,

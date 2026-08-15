@@ -125,7 +125,7 @@ function buildVerificationEmailHtml(name: string, code: string): string {
               </p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                AgriScan AI Professional &bull; Powered by Google Gemini Vision<br/>
+                AgriScan AI Professional &bull; Powered by AI vision models<br/>
                 &copy; 2026 AgriScan AI. All rights reserved.
               </p>
             </td>
@@ -181,7 +181,7 @@ function buildPasswordResetEmailHtml(email: string, code: string): string {
               </p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                AgriScan AI Professional &bull; Powered by Google Gemini Vision<br/>
+                AgriScan AI Professional &bull; Powered by AI vision models<br/>
                 &copy; 2026 AgriScan AI. All rights reserved.
               </p>
             </td>

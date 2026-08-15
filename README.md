@@ -6,7 +6,7 @@ AI-powered plant health inspection, crop scouting, and farm operations platform.
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111)](https://react.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Stripe](https://img.shields.io/badge/Stripe-Billing-635BFF?style=flat-square&logo=stripe&logoColor=white)](https://stripe.com/)
-[![Gemini](https://img.shields.io/badge/Google%20Gemini-Vision%20AI-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-Vision%20AI-412991?style=flat-square&logo=openai&logoColor=white)](https://platform.openai.com/)
 
 Live demo: [agriscan-ai-seven.vercel.app/login](https://agriscan-ai-seven.vercel.app/login)
 
@@ -26,7 +26,7 @@ AgriScan AI is a full-stack Next.js application for diagnosing plant health issu
 
 | Area               | What it does                                                                                                                                                                 |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AI diagnosis       | Uses Google Gemini vision models to analyze plant/crop images and return structured diagnosis, severity, symptoms, scouting notes, recommended actions, and treatment steps. |
+| AI diagnosis       | Uses OpenAI vision models to analyze plant/crop images and return structured diagnosis, severity, symptoms, scouting notes, recommended actions, and treatment steps. Google Gemini is retained as a fallback provider, selectable with a single env var. |
 | Plant management   | Tracks plants, crop profiles, photos, scan history, notes, care reminders, health status, and treatment completion.                                                          |
 | Farmer operations  | Provides field map workflows, crop scanner, yield/risk dashboards, irrigation/input logs, equipment/supplier/expense support, and task management.                           |
 | Nursery operations | Manages propagation batches, batch health screening, grading, inventory status, customer orders, dispatch workflows, certificates, and operational reports.                  |
@@ -89,9 +89,9 @@ Best for nursery inventory, propagation batches, quality grading, stock readines
 
 | Plan       |      Price | AI scan quota     | Model chain                                      |
 | ---------- | ---------: | ----------------- | ------------------------------------------------ |
-| Free       |         $0 | 5 scans per month | Lightweight Gemini models                        |
-| Pro        |  $29/month | Unlimited scans   | Higher quality Gemini flash chain                |
-| Enterprise | $149/month | Unlimited scans   | Enterprise model chain with additional fallbacks |
+| Free       |         $0 | 5 scans per month | `gpt-5.6-luna` → `gpt-4o-mini`                   |
+| Pro        |  $29/month | Unlimited scans   | `gpt-5.6-terra` → `gpt-5.6-luna` → `gpt-4o`      |
+| Enterprise | $149/month | Unlimited scans   | `gpt-5.6-sol` → `gpt-5.6-terra` → `gpt-5.6-luna` |
 
 Plan upgrades are handled by Stripe Checkout. Paid access is granted only after Stripe webhook synchronization updates the subscription and profile records.
 
@@ -104,7 +104,7 @@ Plan upgrades are handled by Stripe Checkout. Paid access is granted only after 
 | App framework     | Next.js 15 App Router                          |
 | UI                | React 19, Tailwind CSS 4, Motion, Lucide icons |
 | Auth and database | Supabase Auth, PostgreSQL, Row Level Security  |
-| AI                | Google Gemini via `@google/genai`              |
+| AI                | OpenAI via `openai`; Gemini via `@google/genai` |
 | Billing           | Stripe Checkout, Billing Portal, Webhooks      |
 | Maps and charts   | Leaflet, React Leaflet, Recharts               |
 | Reports           | CSV, ExcelJS, jsPDF                            |
@@ -128,8 +128,11 @@ components/
   auth-context.tsx     Client auth, app state, and billing helpers
 
 services/
+  ai/                  Provider-neutral image analysis: shared contract/schema,
+                       OpenAI and Gemini providers, per-plan model chains
   auth/                Registration, session, onboarding, and password reset logic
   export/              CSV, Excel, PDF export builders
+  batch-analysis.ts    Multi-image batch analysis with bounded concurrency
   *-service.ts         Domain services for scans, farms, nursery, farmer ops, billing, etc.
 
 lib/
@@ -159,7 +162,7 @@ Required for core app behavior:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+OPENAI_API_KEY=
 PENDING_SIGNUP_SECRET=
 APP_URL=
 ```
@@ -184,7 +187,40 @@ SMTP_FROM=
 Optional:
 
 ```env
+# Provider selection: "openai" (default) or "gemini". Unset = auto-detect
+# from whichever API key is present.
+AI_PROVIDER=
+
+# Pin a single model instead of the per-plan chain in services/ai/models.ts
+OPENAI_MODEL=
 GEMINI_MODEL=
+
+# Only needed when AI_PROVIDER=gemini
+GEMINI_API_KEY=
+
+# Tuning; defaults are in .env.example
+OPENAI_BASE_URL=
+OPENAI_MAX_OUTPUT_TOKENS=
+OPENAI_TIMEOUT_MS=
+OPENAI_MAX_RETRIES=
+AI_BATCH_CONCURRENCY=
+```
+
+### Switching AI providers
+
+Provider selection is entirely environment-driven, so no code change or
+rebuild is needed:
+
+```bash
+AI_PROVIDER=openai   # OpenAI Responses API (default)
+AI_PROVIDER=gemini   # Google Gemini (pre-migration path)
+```
+
+Verify a provider's credentials, model chain, and structured-output contract
+before deploying:
+
+```bash
+node scripts/verify-openai.mjs path/to/crop-photo.jpg
 ```
 
 ---

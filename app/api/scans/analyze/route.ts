@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/server';
 import { analyzeScan } from '@/services/scans-service';
-import { ServiceError } from '@/services/errors';
+import { scanErrorResponse } from '@/lib/scan-error-response';
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,27 +30,7 @@ export async function POST(req: NextRequest) {
       treatment: result.treatment,
     });
   } catch (error: any) {
-    console.error('Scan analysis error', {
-      code: error?.code ?? error?.status ?? 'unknown',
-      timestamp: new Date().toISOString(),
-      message: error?.message ?? 'Unknown scan analysis error',
-    });
-    if (error instanceof ServiceError) {
-      if (error.code === 'quota_exhausted') {
-        const retryAfter = error.retryAfter ?? 17;
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'quota_exhausted',
-            message: 'AI analysis is temporarily unavailable because our API quota limit was reached. Please try again later.',
-            retryAfter,
-          },
-          { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-        );
-      }
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return scanErrorResponse(error, 'Scan analysis error');
   }
 }
 export const maxDuration = 60; // Allow enough time for model analysis
