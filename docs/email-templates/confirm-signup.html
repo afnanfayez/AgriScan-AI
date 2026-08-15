@@ -1,0 +1,58 @@
+<!--
+  Supabase Auth -> Emails -> Templates -> "Confirm sign up" -> Body (Source)
+
+  Subject:  {{ .Token }} - Verify your AgriScan AI account
+
+  {{ .Token }} renders the 6-digit OTP. Do NOT reintroduce {{ .ConfirmationURL }}:
+  that sends a magic link, and this app asks the user to type a code.
+
+  Table-based layout with inline styles because email clients strip <style>
+  blocks, and a flat background colour rather than a gradient because Outlook
+  does not render CSS gradients.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify your email — AgriScan AI</title>
+</head>
+<body style="margin:0;padding:0;background:#f0fdf4;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(5,150,105,0.10);">
+          <tr>
+            <td style="background:#059669;padding:36px 40px;text-align:center;">
+              <span style="font-size:28px;">🌱</span>
+              <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AgriScan AI</span>
+              <p style="margin:8px 0 0;font-size:12px;color:rgba(255,255,255,0.75);letter-spacing:2px;text-transform:uppercase;font-family:monospace;">Pathology Intelligence</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px;">
+              <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#064e3b;">Verify your email address</h2>
+              <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+                Welcome to AgriScan AI! Use the code below to verify your email address and activate your account.
+              </p>
+              <div style="background:#f0fdf4;border:2px solid #6ee7b7;border-radius:16px;padding:28px;text-align:center;margin-bottom:28px;">
+                <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#059669;letter-spacing:3px;text-transform:uppercase;font-family:monospace;">YOUR VERIFICATION CODE</p>
+                <p style="margin:0;font-size:42px;font-weight:800;color:#064e3b;letter-spacing:12px;font-family:monospace;">{{ .Token }}</p>
+                <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">This code expires in <strong>1 hour</strong></p>
+              </div>
+              <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+                If you didn't create an AgriScan AI account, you can safely ignore this email.
+              </p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
+                AgriScan AI Professional<br/>
+                &copy; 2026 AgriScan AI. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

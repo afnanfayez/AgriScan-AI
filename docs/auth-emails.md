@@ -36,22 +36,27 @@ By default both templates contain `{{ .ConfirmationURL }}`, which produces a
 magic link. This app asks the user to type a 6-digit code, so both templates
 **must** contain `{{ .Token }}`.
 
-Edit **Confirm signup**:
+The full branded templates live in this repo so the dashboard is not the only
+copy of them:
+
+- **Confirm signup** -> [`docs/email-templates/confirm-signup.html`](email-templates/confirm-signup.html)
+- **Reset password** -> [`docs/email-templates/reset-password.html`](email-templates/reset-password.html)
+
+Paste each file's contents into the matching template's **Body (Source)** box,
+and set the subjects to:
+
+| Template | Subject |
+|---|---|
+| Confirm signup | `{{ .Token }} - Verify your AgriScan AI account` |
+| Reset password | `{{ .Token }} - Reset your AgriScan AI password` |
+
+Putting `{{ .Token }}` in the subject means the code shows in the inbox preview
+and phone notification, which is how the previous Gmail-sent emails behaved.
+
+The minimum a template needs is just the token:
 
 ```html
-<h2>Verify your email address</h2>
-<p>Welcome to AgriScan AI. Use this code to activate your account:</p>
 <p style="font-size:32px;font-weight:700;letter-spacing:10px;font-family:monospace;">{{ .Token }}</p>
-<p>This code expires in 1 hour. If you didn't create an account, ignore this email.</p>
-```
-
-Edit **Reset password**:
-
-```html
-<h2>Reset your password</h2>
-<p>We received a request to reset your password. Use this code:</p>
-<p style="font-size:32px;font-weight:700;letter-spacing:10px;font-family:monospace;">{{ .Token }}</p>
-<p>This code expires in 1 hour. If you didn't request this, ignore this email — your password will not change.</p>
 ```
 
 > If you leave `{{ .ConfirmationURL }}` in place the emails still send, and the
