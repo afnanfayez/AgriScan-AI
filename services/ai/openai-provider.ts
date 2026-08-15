@@ -127,10 +127,25 @@ interface ExtractedPayload {
  * refusal surfaces as an unhelpful parser crash.
  */
 export function extractPayload(response: any): ExtractedPayload {
+  // A refusal must be found before any text part, so a safety decline never
+  // reaches JSON.parse.
   for (const item of response?.output ?? []) {
     for (const part of item?.content ?? []) {
       if (part?.type === 'refusal' && part.refusal) {
         return { kind: 'refusal', text: String(part.refusal) };
+      }
+    }
+  }
+
+  // Walk the output items rather than relying on `output_text`: that is a
+  // convenience property the SDK computes, not a field the API returns. The
+  // wire format nests the payload under output[].content[] alongside a
+  // separate `reasoning` item, so reading it directly keeps this correct if
+  // the response is ever obtained without the SDK's decoration.
+  for (const item of response?.output ?? []) {
+    for (const part of item?.content ?? []) {
+      if (part?.type === 'output_text' && typeof part.text === 'string' && part.text.trim()) {
+        return { kind: 'text', text: part.text.trim() };
       }
     }
   }

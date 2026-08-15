@@ -22,14 +22,52 @@
  *   5. Batch latency fits the routes' maxDuration budget
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compileAiLayer, canCompile } from './lib/compile-ai.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Minimal .env reader (no dependency) so this harness verifies the SAME
+ * configuration the Next.js app will load, rather than whatever happens to be
+ * exported in the current shell.
+ */
+function parseEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const out = {};
+  for (const raw of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim().replace(/^export\s+/, '');
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+// .env.local wins over .env, matching Next.js.
+const FILE_ENV = { ...parseEnvFile(join(ROOT, '.env')), ...parseEnvFile(join(ROOT, '.env.local')) };
+for (const [k, v] of Object.entries(FILE_ENV)) if (!(k in process.env)) process.env[k] = v;
+
+const SHELL_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
+const FILE_KEY = FILE_ENV.OPENAI_API_KEY || FILE_ENV.OPENAI_KEY;
+
+// When both exist and disagree, test the .env value - that is the one just
+// edited - but say so loudly, because Next.js resolves this the other way and
+// would silently use the shell value instead.
+const KEY_CONFLICT = !!(SHELL_KEY && FILE_KEY && SHELL_KEY !== FILE_KEY);
+const KEY = FILE_KEY || SHELL_KEY;
+const KEY_SOURCE = FILE_KEY ? (existsSync(join(ROOT, '.env.local')) && parseEnvFile(join(ROOT, '.env.local')).OPENAI_API_KEY ? '.env.local' : '.env') : 'shell environment';
+
 const API = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-const KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
 
 const PLANS = ['Free', 'Pro', 'Enterprise'];
 
@@ -194,11 +232,23 @@ async function analyze(model, dataUrl) {
   return { ok: res.ok, status: res.status, body, ms: Date.now() - started };
 }
 
-/** Mirrors extractPayload() in services/ai/openai-provider.ts. */
+/**
+ * Mirrors extractPayload() in services/ai/openai-provider.ts.
+ *
+ * Note `output_text` is a convenience property the SDK computes - it is NOT in
+ * the raw HTTP response. This harness talks to the API directly, so it must
+ * walk output[].content[]; the raw shape is a `reasoning` item followed by a
+ * `message` item whose content holds the output_text part.
+ */
 function extractPayload(body) {
   for (const item of body?.output ?? []) {
     for (const part of item?.content ?? []) {
       if (part?.type === 'refusal' && part.refusal) return { kind: 'refusal', text: part.refusal };
+    }
+  }
+  for (const item of body?.output ?? []) {
+    for (const part of item?.content ?? []) {
+      if (part?.type === 'output_text' && part.text?.trim()) return { kind: 'text', text: part.text.trim() };
     }
   }
   const text = typeof body?.output_text === 'string' ? body.output_text.trim() : '';
@@ -256,7 +306,14 @@ async function main() {
 
   step(1, 'Credential check');
   info(`endpoint: ${API}`);
-  info(`key: ${KEY.slice(0, 11)}…${KEY.slice(-4)}  (${KEY.length} chars)`);
+  info(`key: ${KEY.slice(0, 11)}…${KEY.slice(-4)}  (${KEY.length} chars, from ${KEY_SOURCE})`);
+  if (KEY_CONFLICT) {
+    warn('OPENAI_API_KEY is set BOTH in the shell environment and in .env, with different values.');
+    info(`shell: ${SHELL_KEY.slice(0, 11)}…${SHELL_KEY.slice(-4)}   .env: ${FILE_KEY.slice(0, 11)}…${FILE_KEY.slice(-4)}`);
+    info('This harness is testing the .env value. Next.js does the opposite - a shell');
+    info('variable takes precedence over .env - so `next dev` would use the shell key.');
+    info('Unset the shell variable so both agree before trusting this result in the app.');
+  }
   const catalogRes = await fetch(`${API}/models`, { headers: { Authorization: `Bearer ${KEY}` } });
   const catalog = await catalogRes.json();
   if (!check(catalogRes.ok, `GET /v1/models → ${catalogRes.status}`)) {
@@ -352,7 +409,79 @@ async function main() {
     );
   }
 
-  step(5, 'Result');
+  // The steps above talk to the API directly, which proves the endpoint
+  // contract but not the shipped code. This drives the REAL provider module so
+  // an SDK-behaviour difference (see the output_text note above) cannot hide.
+  step(5, 'Live round trip through the real provider module');
+  if (!canCompile()) {
+    warn('node_modules not installed - skipping (run `pnpm install` to include this step)');
+  } else {
+    let compiled = null;
+    try {
+      compiled = compileAiLayer();
+      pass('services/ai compiled');
+    } catch (e) {
+      failures++;
+      fail('services/ai failed to compile');
+      info(String(e.tscOutput ?? e.message).slice(0, 1500));
+    }
+
+    if (compiled) {
+      const model = [...timings].sort((a, b) => a.ms - b.ms)[0]?.model ?? usable[0];
+
+      // The provider reads process.env directly. Point it at the same key the
+      // rest of this run used, so a stale shell variable does not make the
+      // real module fail against a different credential than everything above.
+      const shellKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = KEY;
+
+      try {
+        const provider = compiled.load('services/ai/openai-provider.js');
+        const started = Date.now();
+        const result = await provider.analyzeWithOpenAi(
+          img.dataUrl,
+          { plantName: 'Roma Tomato', plantType: 'Tomato' },
+          [model]
+        );
+        const ms = Date.now() - started;
+
+        check(!!result && typeof result === 'object', `analyzeWithOpenAi returned a result via ${model} (${ms} ms)`);
+        check(typeof result.diagnosis === 'string' && result.diagnosis.length > 0, 'diagnosis is populated');
+        check(Number.isInteger(result.confidence) && result.confidence >= 1 && result.confidence <= 99, 'confidence is a clamped integer');
+        check(['Low', 'Medium', 'High'].includes(result.severity), 'severity is a valid enum value');
+        check(['Monitor', 'Treat Soon', 'Urgent'].includes(result.treatmentPriority), 'treatmentPriority is a valid enum value');
+        check(Array.isArray(result.organicSteps), 'organicSteps is an array (remapped from organicTreatments)');
+        check(Array.isArray(result.chemicalSteps), 'chemicalSteps is an array (remapped from chemicalTreatments)');
+        check(Array.isArray(result.visibleOrgans), 'visibleOrgans is an array');
+        info(`diagnosis: "${result.diagnosis}" · ${result.confidence}% · ${result.severity} · ${result.treatmentPriority}`);
+      } catch (e) {
+        failures++;
+        fail(`the real provider module threw: ${e?.code ?? ''} ${e?.message ?? e}`);
+      }
+
+      // A key the provider rejects must fail fast as 503, never as an
+      // unhandled 500 out of a scan route.
+      const savedAlias = process.env.OPENAI_KEY;
+      try {
+        delete process.env.OPENAI_API_KEY;
+        delete process.env.OPENAI_KEY;
+        const provider = compiled.load('services/ai/openai-provider.js');
+        await provider.analyzeWithOpenAi(img.dataUrl, {}, [usable[0]]);
+        failures++;
+        fail('a missing key should have thrown');
+      } catch (e) {
+        check(e?.status === 503 && e?.code === 'provider_not_configured', 'a missing key fails fast with 503 provider_not_configured');
+      } finally {
+        if (shellKey !== undefined) process.env.OPENAI_API_KEY = shellKey;
+        else delete process.env.OPENAI_API_KEY;
+        if (savedAlias !== undefined) process.env.OPENAI_KEY = savedAlias;
+      }
+
+      compiled.cleanup();
+    }
+  }
+
+  step(6, 'Result');
   if (failures === 0) {
     console.log(`  \x1b[32mAll checks passed.\x1b[0m Fastest reachable model: ${
       [...timings].sort((a, b) => a.ms - b.ms)[0]?.model ?? usable[0]

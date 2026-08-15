@@ -13,14 +13,8 @@
  * The live counterpart is scripts/verify-openai.mjs, which needs a key.
  */
 
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { rmSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const BUILD = join(ROOT, '.verify-build');
+import { join } from 'node:path';
+import { compileAiLayer, ROOT } from './lib/compile-ai.mjs';
 
 const pass = (m) => console.log(`  \x1b[32mPASS\x1b[0m  ${m}`);
 const fail = (m) => console.log(`  \x1b[31mFAIL\x1b[0m  ${m}`);
@@ -50,40 +44,16 @@ function throws(fn, predicate, msg) {
 
 // ── compile the real modules ─────────────────────────────────────────────────
 step('Compiling services/ai → CommonJS');
-rmSync(BUILD, { recursive: true, force: true });
+let load, cleanup, require;
 try {
-  execFileSync('npx', ['tsc', '-p', join(ROOT, 'scripts/tsconfig.verify.json')], {
-    cwd: ROOT,
-    stdio: 'pipe',
-    shell: process.platform === 'win32',
-  });
+  ({ load, cleanup, require } = compileAiLayer());
   pass('tsc emitted without errors');
 } catch (e) {
-  failures++;
   fail('tsc failed');
-  info(String(e.stdout ?? e.message).slice(0, 2000));
+  info(String(e.tscOutput ?? e.message).slice(0, 2000));
   process.exitCode = 1;
   process.exit(1);
 }
-
-const require = createRequire(import.meta.url);
-
-// The emitted CJS keeps Next's "@/..." path alias verbatim, which Node cannot
-// resolve. Map it onto the build output so the compiled modules load as-is.
-const Module = require('node:module');
-const resolveFilename = Module._resolveFilename;
-Module._resolveFilename = function (request, ...rest) {
-  if (typeof request === 'string' && request.startsWith('@/')) {
-    return resolveFilename.call(this, join(BUILD, request.slice(2)), ...rest);
-  }
-  return resolveFilename.call(this, request, ...rest);
-};
-
-const load = (rel) => {
-  const p = join(BUILD, rel);
-  if (!existsSync(p)) throw new Error(`compiled module missing: ${rel}`);
-  return require(p);
-};
 
 const contract = load('services/ai/contract.js');
 const aiErrors = load('services/ai/errors.js');
@@ -512,8 +482,7 @@ eq(sequential.value?.totalSamples, 3, 'sequential mode analyzes every image');
 delete process.env.AI_BATCH_CONCURRENCY;
 
 // ── result ───────────────────────────────────────────────────────────────────
-Module._resolveFilename = resolveFilename;
-rmSync(BUILD, { recursive: true, force: true });
+cleanup();
 console.log('');
 if (failures === 0) {
   console.log('\x1b[32mAll offline checks passed.\x1b[0m Run scripts/verify-openai.mjs with a valid key for the live leg.');
