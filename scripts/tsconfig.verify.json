@@ -1,0 +1,20 @@
+{
+  "//": "Compiles the AI layer to CommonJS so scripts/verify-ai-offline.mjs can exercise the real shipped modules instead of a re-implementation of them.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "outDir": "../.verify-build",
+    "rootDir": ".."
+  },
+  "include": [
+    "../services/ai/**/*.ts",
+    "../services/errors.ts",
+    "../services/batch-analysis.ts",
+    "../lib/supabase.ts"
+  ]
+}

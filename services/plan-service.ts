@@ -8,22 +8,16 @@ export type Plan = 'Free' | 'Pro' | 'Enterprise';
 
 export type UsageKind = 'scan' | 'field_scan' | 'batch_scan';
 
-// Single source of truth for what each subscription tier gets: how many
-// Gemini analyses per calendar month, and which models are tried (in order)
-// for that tier. `monthlyScans: null` means unlimited.
-export const PLAN_LIMITS: Record<Plan, { monthlyScans: number | null; modelChain: string[] }> = {
-  Free: {
-    monthlyScans: 5,
-    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
-  },
-  Pro: {
-    monthlyScans: null,
-    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
-  },
-  Enterprise: {
-    monthlyScans: null,
-    modelChain: ['gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-pro'],
-  },
+// How many AI analyses each subscription tier gets per calendar month.
+// `monthlyScans: null` means unlimited.
+//
+// Which *models* each tier is analyzed with lives in services/ai/models.ts,
+// keyed by provider - keeping it out of here lets the AI layer be imported
+// (and verified) without pulling in the Supabase server client.
+export const PLAN_LIMITS: Record<Plan, { monthlyScans: number | null }> = {
+  Free: { monthlyScans: 5 },
+  Pro: { monthlyScans: null },
+  Enterprise: { monthlyScans: null },
 };
 
 function startOfCurrentMonthIso(): string {
@@ -31,10 +25,10 @@ function startOfCurrentMonthIso(): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
-// Throws a 429 ServiceError if recording `weight` more Gemini analyses this
+// Throws a 429 ServiceError if recording `weight` more AI analyses this
 // calendar month would put the user over their plan's quota. `weight` lets
 // batch/field scans check `images.length` in one call before spending any
-// Gemini calls.
+// provider calls.
 export async function assertWithinQuota(
   supabase: SupabaseClient,
   user: SupabaseUserProfile,

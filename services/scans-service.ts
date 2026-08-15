@@ -4,7 +4,7 @@ import type { SupabaseUserProfile } from '@/lib/auth';
 import type { PlantScan, TreatmentPlan } from '@/types/domain';
 import { mapTreatment } from './treatments-service';
 import { ServiceError } from './errors';
-import { runGeminiPlantAnalysis } from './gemini-analysis';
+import { runPlantAnalysis } from './ai';
 import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -63,7 +63,7 @@ export async function analyzeScan(
 
   await assertWithinQuota(supabase, user);
 
-  const { diagnosis, confidence, severity, symptoms, organicSteps, chemicalSteps } = await runGeminiPlantAnalysis(
+  const { diagnosis, confidence, severity, symptoms, organicSteps, chemicalSteps } = await runPlantAnalysis(
     image,
     { plantName: plant.name, plantType: plant.type },
     user.plan
@@ -145,7 +145,7 @@ export async function analyzeScan(
         `Confidence: ${confidence}%`,
         `Severity: ${severity}`,
         `Plant status updated to: ${nextStatus}`,
-        mismatchFlag ? 'Important: Gemini indicated the image may not match the selected plant record. Review the saved scan image before applying treatment.' : '',
+        mismatchFlag ? 'Important: the AI analysis indicated the image may not match the selected plant record. Review the saved scan image before applying treatment.' : '',
         `Visible evidence: ${symptoms}`,
         `Organic steps:\n${organicSummary}`,
         `Chemical controls:\n${chemicalSummary}`,

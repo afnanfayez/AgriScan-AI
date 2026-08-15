@@ -119,7 +119,7 @@ export default function FarmerBatchScanSection({ farms, onScanComplete }: Farmer
             <section className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-slate-800 dark:bg-slate-950/50">
               <div>
                 <p className="text-sm font-bold text-stone-950 dark:text-slate-50">1. Select a field</p>
-                <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-slate-400">Analysis uses this field's crop profile as Gemini context.</p>
+                <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-slate-400">Analysis uses this field's crop profile as AI context.</p>
               </div>
               <select
                 value={selectedFarmId}

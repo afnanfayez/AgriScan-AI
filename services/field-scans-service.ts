@@ -3,7 +3,7 @@ import type { SupabaseUserProfile } from '@/lib/auth';
 import type { FieldScan, ScanResultItem } from '@/types/domain';
 import { hasCropType, parseCropTypes } from '@/lib/crop-types';
 import { ServiceError } from './errors';
-import { runGeminiBatchAnalysis } from './gemini-batch-analysis';
+import { runBatchAnalysis } from './batch-analysis';
 import { assertWithinQuota, recordUsage } from './plan-service';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -133,7 +133,7 @@ export async function createFieldScan(
 
   await assertWithinQuota(supabase, user, images.length);
 
-  const { totalSamples, healthyCount, infectionPercentage, results } = await runGeminiBatchAnalysis(
+  const { totalSamples, healthyCount, infectionPercentage, results } = await runBatchAnalysis(
     images,
     { plantName: farm.name, plantType: selectedCropType || farm.crop_type },
     `field-scans/${user.id}`,
