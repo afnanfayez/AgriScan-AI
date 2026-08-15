@@ -43,6 +43,7 @@ async function findAuthUserByEmail(
 /** Supabase surfaces send-rate limiting as a 429; everything else is ours to phrase. */
 function describeAuthError(error: { message?: string; status?: number } | null, fallback: string): ServiceError {
   const message = error?.message || '';
+
   if (error?.status === 429 || /rate limit/i.test(message)) {
     return new ServiceError(
       'Too many email requests. Please wait a minute before trying again.',
@@ -50,6 +51,17 @@ function describeAuthError(error: { message?: string; status?: number } | null, 
       { code: 'email_rate_limited' }
     );
   }
+
+  // Supabase reports SMTP problems as "Error sending confirmation email". Name
+  // the actual cause so this is not mistaken for a bad password or address.
+  if (/error sending/i.test(message)) {
+    return new ServiceError(
+      'We could not send the verification code. The email service is not configured correctly - check the Supabase SMTP settings and Auth logs.',
+      502,
+      { code: 'email_send_failed' }
+    );
+  }
+
   return new ServiceError(message || fallback, error?.status && error.status < 500 ? error.status : 500);
 }
 
@@ -194,10 +206,27 @@ export async function resendVerificationCode(supabase: SupabaseClient, email: st
   const { error } = await supabase.auth.resend({ type: 'signup', email: normalizedEmail });
 
   if (error) {
-    console.error('Resend verification failed:', { status: error.status, message: error.message });
+    console.error('Resend verification failed:', {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+
     if (error.status === 429 || /rate limit/i.test(error.message || '')) {
       throw describeAuthError(error, 'Failed to resend the verification code.');
     }
+
+    // A 5xx (or an explicit "error sending") is the email service failing, not
+    // the address being wrong. Reporting "no pending registration" for that
+    // sends the operator hunting in entirely the wrong place.
+    if ((error.status ?? 500) >= 500 || /error sending/i.test(error.message || '')) {
+      throw new ServiceError(
+        'We could not send the verification code. The email service is not configured correctly - check the Supabase SMTP settings and Auth logs.',
+        502,
+        { code: 'email_send_failed' }
+      );
+    }
+
     // Supabase rejects a resend when there is nothing pending for the address.
     throw new ServiceError(
       'No pending registration found for this email. Please sign up first.',

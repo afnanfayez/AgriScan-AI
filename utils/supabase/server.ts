@@ -11,6 +11,21 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
  * Use this in Server Components, Route Handlers, and Server Actions.
  */
 export const createClient = async () => {
+  // Checked here rather than at module scope so `next build` still works in
+  // environments that inject env vars only at runtime. Without this the client
+  // is constructed against `undefined` and every auth call - login, signup
+  // codes, password reset - fails with an opaque fetch error instead of saying
+  // what is actually missing.
+  if (!supabaseUrl || !supabaseKey) {
+    const missing = [
+      !supabaseUrl && 'NEXT_PUBLIC_SUPABASE_URL',
+      !supabaseKey && 'NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)',
+    ].filter(Boolean);
+    throw new Error(
+      `Supabase is not configured: ${missing.join(' and ')} missing. Auth, signup codes, and password reset cannot work without it. Copy .env.example to .env.local and fill in the project values.`
+    );
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseKey, {

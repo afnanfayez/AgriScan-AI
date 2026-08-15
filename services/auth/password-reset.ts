@@ -37,15 +37,27 @@ export async function requestPasswordReset(
 
   const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
 
-  // Rate limiting is the one failure worth surfacing - the user can act on it.
   if (isRateLimited(error)) {
     throw RATE_LIMIT_ERROR();
   }
 
   if (error) {
-    // Anything else stays generic: reporting "no such user" here would turn
-    // this endpoint into an account-enumeration oracle.
-    console.error('Password reset request failed:', { status: error.status, message: error.message });
+    // Supabase already provides the anti-enumeration guarantee here: an address
+    // that is not registered comes back as SUCCESS, not as an error. So any
+    // error we receive is a genuine system failure - almost always SMTP not
+    // being configured, or the provider rejecting the send - and reporting
+    // "a code has been sent" over the top of it makes a broken email setup
+    // impossible to diagnose from the outside.
+    console.error('Password reset email failed to send:', {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+    throw new ServiceError(
+      'We could not send the reset code. The email service is not configured correctly - check the Supabase SMTP settings and Auth logs.',
+      502,
+      { code: 'email_send_failed' }
+    );
   }
 
   return { message: ANTI_ENUMERATION_MESSAGE };
