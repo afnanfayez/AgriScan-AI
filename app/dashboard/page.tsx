@@ -800,7 +800,7 @@ function DashboardContent() {
     }
   };
 
-  // Analyze Image with Gemini AI on Server Side
+  // Analyze Image with the configured AI provider on Server Side
   const runAIAnalysis = async () => {
     if (!capturedImage) return;
     setScanError('');
@@ -2050,11 +2050,11 @@ function DashboardContent() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-slate-50">Neural Diagnosis & Inspection Lab</h1>
-                    <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">Gemini-powered diagnosis for full plants, leaves, stems, fruit, flowers, roots, or field context.</p>
+                    <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">AI-powered diagnosis for full plants, leaves, stems, fruit, flowers, roots, or field context.</p>
                   </div>
                   <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
                     <Sparkles className="h-4 w-4" />
-                    <span>Gemini vision analysis</span>
+                    <span>AI vision analysis</span>
                   </div>
                 </div>
 
@@ -2190,7 +2190,7 @@ function DashboardContent() {
                   <div className="mx-auto max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-600 dark:text-emerald-400" />
                     <div>
-                      <h3 className="mt-5 text-base font-bold text-stone-900 dark:text-slate-50 font-mono">Gemini Analysis In Progress</h3>
+                      <h3 className="mt-5 text-base font-bold text-stone-900 dark:text-slate-50 font-mono">AI Analysis In Progress</h3>
                       <p className="mt-2 text-xs leading-relaxed text-stone-500 dark:text-slate-400">
                         Inspecting visible plant organs, image quality, symptoms, pests, stress, and treatment options.
                       </p>
@@ -2316,7 +2316,7 @@ function DashboardContent() {
                     <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
                       <div className="flex h-full min-h-56 flex-col justify-center rounded-xl border border-dashed border-stone-200 bg-stone-50/70 p-6 text-center dark:border-slate-800 dark:bg-slate-950/40">
                         <Sparkles className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-                        <h3 className="mt-4 text-base font-bold text-stone-900 dark:text-slate-50">Ready for Gemini diagnosis</h3>
+                        <h3 className="mt-4 text-base font-bold text-stone-900 dark:text-slate-50">Ready for AI diagnosis</h3>
                         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-500 dark:text-slate-400">
                           The image will be analyzed against the selected crop profile and saved with generated treatment steps.
                         </p>
@@ -2399,7 +2399,7 @@ function DashboardContent() {
                             <div>
                               <h4 className="text-sm font-bold">Possible specimen mismatch</h4>
                               <p className="mt-1 text-xs leading-relaxed">
-                                Gemini indicates the uploaded image may not match the selected plant. The scan is still saved under the selected plant record so you can review it in that plant timeline.
+                                The AI analysis indicates the uploaded image may not match the selected plant. The scan is still saved under the selected plant record so you can review it in that plant timeline.
                               </p>
                             </div>
                           </div>

@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/server';
 import { listFieldScans, createFieldScan } from '@/services/field-scans-service';
 import { ServiceError } from '@/services/errors';
+import { scanErrorResponse } from '@/lib/scan-error-response';
 
 export async function GET(req: NextRequest) {
   try {
@@ -49,12 +50,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, fieldScan: result.fieldScan });
   } catch (error: any) {
-    console.error('Create field scan error:', error);
-    if (error instanceof ServiceError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return scanErrorResponse(error, 'Create field scan error');
   }
 }
 
-export const maxDuration = 120; // Multiple sequential Gemini calls take longer than a single scan
+export const maxDuration = 120; // Multiple per-image AI calls take longer than a single scan

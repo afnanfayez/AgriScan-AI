@@ -110,7 +110,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute z-10 left-12 right-12 top-[29%] space-y-3">
           <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Gemini Multimodal Engine &middot; Live</span>
+            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">AI Multimodal Engine &middot; Live</span>
           </div>
           <h1 className="text-3xl font-extrabold text-white leading-tight tracking-tight">
             Smart Plant<br />
@@ -122,7 +122,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute z-10 left-12 right-12 top-[58%] space-y-4">
           <div className="hidden items-center space-x-2 px-3 py-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Gemini Multimodal Engine &middot; Live</span>
+            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">AI Multimodal Engine &middot; Live</span>
           </div>
           <h1 className="hidden text-3xl font-extrabold text-white leading-tight tracking-tight">
             Smart Plant<br />
@@ -130,7 +130,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </h1>
 
           <p className="text-sm text-stone-200/95 leading-relaxed font-normal">
-            Instant disease diagnosis powered by Google Gemini Vision. Protect your crops before it&apos;s too late.
+            Instant disease diagnosis powered by AI vision models. Protect your crops before it&apos;s too late.
           </p>
 
           <div className="hidden">

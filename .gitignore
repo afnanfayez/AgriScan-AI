@@ -6,3 +6,6 @@ coverage/
 .env*
 !.env.example
 *.tsbuildinfo
+
+# Transient CommonJS build used by scripts/verify-ai-offline.mjs
+.verify-build/

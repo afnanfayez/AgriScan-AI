@@ -21,7 +21,17 @@ PROJECT_ID="YOUR_PROJECT_ID"          # e.g. agriscan-ai-prod
 SERVICE_NAME="YOUR_SERVICE_NAME"      # e.g. agriscan-ai   (find with: gcloud run services list)
 REGION="YOUR_REGION"                  # e.g. europe-west1
 
+# AI provider: "openai" (default) or "gemini" (fallback path).
+AI_PROVIDER="openai"
+
+# Required when AI_PROVIDER=openai. Unlike GEMINI_API_KEY this is NOT injected
+# automatically by AI Studio, so it must be set here or production scans fail
+# with a 503 while local development keeps working.
+OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+
+# Only needed when AI_PROVIDER=gemini.
 GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+
 APP_URL="https://YOUR_CLOUD_RUN_URL"  # e.g. https://agriscan-ai-xxx.run.app
 
 NEXT_PUBLIC_SUPABASE_URL="https://YOUR_SUPABASE_PROJECT.supabase.co"
@@ -54,6 +64,18 @@ if [[ "$PROJECT_ID" == "YOUR_PROJECT_ID" || "$SERVICE_NAME" == "YOUR_SERVICE_NAM
   exit 1
 fi
 
+# The active provider must have a real key, or every scan route answers 503.
+if [[ "$AI_PROVIDER" == "openai" && "$OPENAI_API_KEY" == "YOUR_OPENAI_API_KEY" ]]; then
+  echo "❌  ERROR: AI_PROVIDER=openai but OPENAI_API_KEY is still a placeholder."
+  echo "    Get a key at: https://platform.openai.com/api-keys"
+  exit 1
+fi
+
+if [[ "$AI_PROVIDER" == "gemini" && "$GEMINI_API_KEY" == "YOUR_GEMINI_API_KEY" ]]; then
+  echo "❌  ERROR: AI_PROVIDER=gemini but GEMINI_API_KEY is still a placeholder."
+  exit 1
+fi
+
 # ─── SET PROJECT ──────────────────────────────────────────────────────────────
 echo "🔧  Setting project to: $PROJECT_ID"
 gcloud config set project "$PROJECT_ID"
@@ -65,7 +87,9 @@ echo "🚀  Updating environment variables on Cloud Run service: $SERVICE_NAME (
 gcloud run services update "$SERVICE_NAME" \
   --region "$REGION" \
   --update-env-vars \
-"GEMINI_API_KEY=${GEMINI_API_KEY},\
+"AI_PROVIDER=${AI_PROVIDER},\
+OPENAI_API_KEY=${OPENAI_API_KEY},\
+GEMINI_API_KEY=${GEMINI_API_KEY},\
 APP_URL=${APP_URL},\
 NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL},\
 NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY},\
