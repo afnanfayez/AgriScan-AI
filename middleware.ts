@@ -15,7 +15,8 @@ const AUTH_ONLY_PREFIXES = ["/login", "/register"];
  * Refreshes the Supabase session on every request and enforces route access:
  * - Unauthenticated users are redirected away from protected routes to /login.
  * - Authenticated users are redirected away from /login and /register to /dashboard.
- * - '/' redirects to /dashboard or /login depending on auth state.
+ * - Authenticated users hitting '/' are redirected to /dashboard; unauthenticated
+ *   visitors see the public landing page.
  * API routes are never redirected — they return their own JSON error responses.
  */
 export async function middleware(request: NextRequest) {
@@ -36,8 +37,8 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   };
 
-  if (pathname === "/") {
-    return redirectTo(user ? "/dashboard" : "/login");
+  if (pathname === "/" && user) {
+    return redirectTo("/dashboard");
   }
 
   if (PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix)) && !user) {
