@@ -24,9 +24,19 @@ Nothing below can be done from code. Do all five steps, in order.
 
 **Authentication → Sign In / Providers → Email**
 
-Enable **Confirm email**. Without it Supabase auto-confirms new users, no signup
-code is ever sent, and `verifyOtp({ type: 'signup' })` fails with an invalid-token
-error because there was no token to begin with.
+Enable **Confirm email**. This is the single most likely thing to be wrong.
+
+**Symptom when it is off:** registering takes you straight to the dashboard and
+no email ever arrives. That is not an email problem — no email was requested.
+With confirmation disabled, `signUp()` auto-confirms the account and returns a
+*session*; the SSR client writes those cookies, so the browser is immediately
+authenticated, and middleware redirects `/register` to `/dashboard` before the
+OTP screen can render. The account exists and was never verified.
+
+`services/auth/registration.ts` now detects this: if `signUp()` comes back with
+a session it clears the cookies, removes the account it just created, and fails
+with *"Email verification is turned off for this project"* rather than silently
+signing in an unverified user.
 
 ### 2. Make the templates send a CODE, not a link
 

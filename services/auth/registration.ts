@@ -87,7 +87,7 @@ export async function signup(
 
   const avatarUrl = `https://picsum.photos/seed/${email.replace(/[^a-zA-Z0-9]/g, '')}/150/150`;
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
     options: {
@@ -104,6 +104,39 @@ export async function signup(
   if (error) {
     console.error('Signup failed:', { status: error.status, message: error.message });
     throw describeAuthError(error, 'Failed to start signup. Please try again.');
+  }
+
+  // A session here means Supabase's "Confirm email" is OFF: it auto-confirmed
+  // the account and sent no code. Left alone this fails in a way that looks
+  // like an email problem but is not - the SSR client has already written
+  // session cookies, so the browser is now authenticated, and middleware
+  // bounces /register straight to /dashboard. The user lands on the dashboard
+  // wondering where their code went, holding an account that was never
+  // verified.
+  if (data.session) {
+    await supabase.auth.signOut();
+
+    // `existing` was null above, so this account did not exist before this
+    // request - it is purely an artifact of the misconfiguration. Removing it
+    // keeps the error message honest and lets the same address retry once the
+    // setting is fixed, instead of hitting "an account already exists".
+    if (!existing && data.user) {
+      const { error: cleanupError } = await adminClient.auth.admin.deleteUser(data.user.id);
+      if (cleanupError) {
+        console.error('Failed to remove auto-confirmed signup:', cleanupError.message);
+      }
+    }
+
+    console.error('Signup blocked: Supabase "Confirm email" is disabled', {
+      email,
+      hint: 'Authentication -> Sign In / Providers -> Email -> Confirm email',
+    });
+
+    throw new ServiceError(
+      'Email verification is turned off for this project, so no code was sent. Enable "Confirm email" in Supabase under Authentication → Sign In / Providers → Email, then try again.',
+      503,
+      { code: 'email_confirmation_disabled' }
+    );
   }
 
   return { email };
