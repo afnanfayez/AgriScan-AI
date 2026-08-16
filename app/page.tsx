@@ -54,7 +54,7 @@ const STEPS = [
     icon: Camera,
     step: '01',
     title: 'Capture',
-    description: 'Photograph any leaf, stem, or fruit showing signs of stress — from a phone or the field.',
+    description: 'Photograph any leaf, stem, or fruit showing signs of stress, using a phone in the field.',
     image: IMAGES.captureStep,
   },
   {
@@ -78,7 +78,7 @@ const FEATURES = [
     icon: Sparkles,
     title: 'AI diagnosis',
     description:
-      'Vision models return structured diagnosis, severity, symptoms, and treatment steps — with Gemini as an automatic fallback provider.',
+      'Vision models return structured diagnosis, severity, symptoms, and treatment steps, with Gemini as an automatic fallback provider.',
     big: true,
     image: IMAGES.featuresBig,
   },
@@ -304,7 +304,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-6 max-w-lg text-base leading-relaxed text-stone-500 dark:text-slate-400">
-              AgriScan AI turns a photo into a structured diagnosis and treatment plan — built for home gardeners,
+              AgriScan AI turns a photo into a structured diagnosis and treatment plan, built for home gardeners,
               commercial farmers, and nursery operators alike.
             </p>
 
@@ -520,7 +520,7 @@ export default function LandingPage() {
             Built for every kind of grower
           </h2>
           <p className="mt-3 text-sm text-stone-500 sm:text-base dark:text-slate-400">
-            One platform, three workflows — pick the one that fits how you grow.
+            One platform, three workflows: pick the one that fits how you grow.
           </p>
         </motion.div>
 
@@ -674,7 +674,7 @@ export default function LandingPage() {
                   <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">AgriScan AI</span>
                 </div>
                 <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-500 dark:text-slate-400">
-                  Instant plant health diagnosis powered by AI vision models — built for gardeners, farmers, and
+                  Instant plant health diagnosis powered by AI vision models, built for gardeners, farmers, and
                   nurseries.
                 </p>
                 <Link
