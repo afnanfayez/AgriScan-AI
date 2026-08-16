@@ -14,215 +14,80 @@ Live demo: [agriscan-ai-seven.vercel.app/login](https://agriscan-ai-seven.vercel
 
 ## Overview
 
-AgriScan AI is a full-stack Next.js application for diagnosing plant health issues from images and managing agricultural workflows across three operation types:
+A full-stack Next.js app that diagnoses plant health from photos and manages agricultural workflows for three roles: **Home Gardener** (plant tracking, care reminders, scans), **Commercial Farmer** (field mapping, crop scanner, yield/risk analytics, irrigation logs), and **Nursery Operator** (batch inventory, health screening, grading, orders/dispatch, certificates).
 
-- **Home Gardener**: personal plant tracking, care reminders, AI scans, treatment plans, and garden health overview.
-- **Commercial Farmer**: field mapping, crop scanner workflows, yield/risk analytics, irrigation and input logs, and labor/task tracking.
-- **Nursery Operator**: inventory batches, health screening, quality grading, orders/dispatch, certificates, and loss/turnover reporting.
+---
+
+## Demo Accounts
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Farmer | `carlos.farmer@agriscan-test.dev` | `FarmerPass#2026` |
+| Gardener | `layla.gardener@agriscan-test.dev` | `GardenerPass#2026` |
+| Nursery | `mei.nursery@agriscan-test.dev` | `NurseryPass#2026` |
+
+Test-only credentials — do not reuse elsewhere.
 
 ---
 
 ## Core Features
 
-| Area               | What it does                                                                                                                                                                 |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AI diagnosis       | Uses OpenAI vision models to analyze plant/crop images and return structured diagnosis, severity, symptoms, scouting notes, recommended actions, and treatment steps. Google Gemini is retained as a fallback provider, selectable with a single env var. |
-| Plant management   | Tracks plants, crop profiles, photos, scan history, notes, care reminders, health status, and treatment completion.                                                          |
-| Farmer operations  | Provides field map workflows, crop scanner, yield/risk dashboards, irrigation/input logs, equipment/supplier/expense support, and task management.                           |
-| Nursery operations | Manages propagation batches, batch health screening, grading, inventory status, customer orders, dispatch workflows, certificates, and operational reports.                  |
-| Community          | Lets users create posts and comments for shared agricultural questions and observations.                                                                                     |
-| Notifications      | Records important events such as scans, treatment updates, reminders, and operational changes.                                                                               |
-| Exporting          | Exports farm data as CSV, Excel, or PDF reports.                                                                                                                             |
-| Billing            | Uses Stripe Checkout, Billing Portal, and webhooks to manage Free, Pro, and Enterprise plans safely server-side.                                                             |
-| Auth               | Uses Supabase Auth with email OTP verification and password reset flows.                                                                                                     |
-
----
-
-## Roles
-
-### Home Gardener
-
-Navigation:
-
-- My Garden
-- My Plants
-- Plant Doctor
-- Care Plans
-- Community
-- Settings
-
-Best for personal gardens, houseplants, and small collections where the main workflow is scanning plants, tracking treatments, and managing reminders.
-
-### Commercial Farmer
-
-Navigation:
-
-- Farm Overview
-- Field Map
-- Crop Scanner
-- Yield & Risk Analytics
-- Irrigation & Inputs
-- Labor/Tasks
-- Community
-- Settings
-
-Best for field-level crop operations, repeat scouting, irrigation records, risk analytics, and work coordination.
-
-### Nursery Operator
-
-Navigation:
-
-- Inventory Overview
-- Batches
-- Health Screening
-- Quality Grading
-- Orders & Dispatch
-- Loss & Turnover Reports
-- Community
-- Settings
-
-Best for nursery inventory, propagation batches, quality grading, stock readiness, orders, dispatch, and certificates.
+| Area | What it does |
+| --- | --- |
+| AI diagnosis | OpenAI vision models return structured diagnosis, severity, symptoms, and treatment steps. Gemini is a fallback provider, switchable via one env var. |
+| Plant management | Plants, crop profiles, photos, scan history, notes, reminders, health status. |
+| Farmer / Nursery ops | Field map, crop scanner, yield/risk dashboards, irrigation logs — or batches, screening, grading, orders, certificates. |
+| Community | Posts and comments for shared agricultural questions. |
+| Notifications & exports | Event tracking plus CSV/Excel/PDF reports. |
+| Billing | Stripe Checkout, Billing Portal, and webhooks manage Free/Pro/Enterprise server-side. |
+| Auth | Supabase Auth with email OTP verification and password reset. |
 
 ---
 
 ## Subscription Plans
 
-| Plan       |      Price | AI scan quota     | Model chain                                      |
-| ---------- | ---------: | ----------------- | ------------------------------------------------ |
-| Free       |         $0 | 5 scans per month | `gpt-5.6-luna` → `gpt-4o-mini`                   |
-| Pro        |  $29/month | Unlimited scans   | `gpt-5.6-terra` → `gpt-5.6-luna` → `gpt-4o`      |
-| Enterprise | $149/month | Unlimited scans   | `gpt-5.6-sol` → `gpt-5.6-terra` → `gpt-5.6-luna` |
+| Plan | Price | AI scan quota | Model chain |
+| --- | ---: | --- | --- |
+| Free | $0 | 5/month | `gpt-5.6-luna` → `gpt-4o-mini` |
+| Pro | $29/mo | Unlimited | `gpt-5.6-terra` → `gpt-5.6-luna` → `gpt-4o` |
+| Enterprise | $149/mo | Unlimited | `gpt-5.6-sol` → `gpt-5.6-terra` → `gpt-5.6-luna` |
 
-Plan upgrades are handled by Stripe Checkout. Paid access is granted only after Stripe webhook synchronization updates the subscription and profile records.
+Paid access is granted only after Stripe webhook synchronization.
 
 ---
 
 ## Tech Stack
 
-| Layer             | Technology                                     |
-| ----------------- | ---------------------------------------------- |
-| App framework     | Next.js 15 App Router                          |
-| UI                | React 19, Tailwind CSS 4, Motion, Lucide icons |
-| Auth and database | Supabase Auth, PostgreSQL, Row Level Security  |
-| AI                | OpenAI via `openai`; Gemini via `@google/genai` |
-| Billing           | Stripe Checkout, Billing Portal, Webhooks      |
-| Maps and charts   | Leaflet, React Leaflet, Recharts               |
-| Reports           | CSV, ExcelJS, jsPDF                            |
-| Auth email        | Supabase Auth OTP (SMTP + templates configured in the Supabase dashboard) |
+Next.js 15 (App Router) · React 19 · Tailwind CSS 4 · Supabase (Auth, Postgres, RLS) · OpenAI (`openai`, Gemini fallback via `@google/genai`) · Stripe · Leaflet/Recharts · CSV/ExcelJS/jsPDF exports
 
 ---
 
 ## Project Structure
 
 ```text
-app/
-  api/                 Next.js API routes for auth, billing, scans, exports, and resources
-  dashboard/           Main authenticated workspace
-  register/            Signup and email verification flow
-  login/               Login flow
-  Settings/            Route alias for the settings workspace tab
-
-components/
-  dashboard/           Role-specific dashboard sections and shared shell
-  ui/                  Shared UI primitives
-  auth-context.tsx     Client auth, app state, and billing helpers
-
+app/        Routes: dashboard, register/login, API routes
+components/ Role-specific dashboard sections, shared UI, auth-context.tsx
 services/
-  ai/                  Provider-neutral image analysis: shared contract/schema,
-                       OpenAI and Gemini providers, per-plan model chains
-  auth/                Registration, session, onboarding, and password reset logic
-  export/              CSV, Excel, PDF export builders
-  batch-analysis.ts    Multi-image batch analysis with bounded concurrency
-  *-service.ts         Domain services for scans, farms, nursery, farmer ops, billing, etc.
-
-lib/
-  auth.ts              Server session user resolver
-  stripe.ts            Server-only Stripe client
-  supabase.ts          Shared Supabase helpers
-
-utils/supabase/
-  client.ts            Browser Supabase client
-  server.ts            Server Supabase client
-  middleware.ts        Session middleware helpers
+  ai/       Provider-neutral image analysis (contract, OpenAI/Gemini providers, model chains)
+  auth/     Registration, session, onboarding, password reset
+  *-service.ts  Domain services (scans, farms, nursery, billing, etc.)
+lib/        Server helpers (auth, stripe, supabase)
+utils/supabase/  Browser/server/middleware Supabase clients
 ```
 
 ---
 
 ## Environment Variables
 
-Create `.env.local` from `.env.example` and fill in the required values.
-
 ```bash
 cp .env.example .env.local
 ```
 
-Required for core app behavior:
+Fill in `.env.example` — it documents every variable inline. Core requirements: Supabase URL/keys, `OPENAI_API_KEY`, `APP_URL`, Stripe keys/price IDs.
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-OPENAI_API_KEY=
-APP_URL=
-```
+**Auth emails** are sent by Supabase Auth, not this app — SMTP and templates are configured in the Supabase dashboard. Setup and troubleshooting: **[docs/auth-emails.md](docs/auth-emails.md)**.
 
-Required for billing:
-
-```env
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_ID_PRO=
-STRIPE_PRICE_ID_ENTERPRISE=
-```
-
-### Auth emails
-
-Signup verification codes and password reset codes are sent by **Supabase Auth**,
-so there are no email environment variables. SMTP credentials, the sender
-details, and the email templates are configured in the Supabase dashboard:
-
-- [SMTP settings](https://supabase.com/dashboard/project/_/auth/smtp)
-- [Email templates](https://supabase.com/dashboard/project/_/auth/templates)
-
-Both templates must contain `{{ .Token }}` to render a 6-digit code instead of a
-magic link, and **Confirm email** must be enabled under Sign In / Providers.
-
-Full setup and verification steps: **[docs/auth-emails.md](docs/auth-emails.md)**
-
-Optional:
-
-```env
-# Provider selection: "openai" (default) or "gemini". Unset = auto-detect
-# from whichever API key is present.
-AI_PROVIDER=
-
-# Pin a single model instead of the per-plan chain in services/ai/models.ts
-OPENAI_MODEL=
-GEMINI_MODEL=
-
-# Only needed when AI_PROVIDER=gemini
-GEMINI_API_KEY=
-
-# Tuning; defaults are in .env.example
-OPENAI_BASE_URL=
-OPENAI_MAX_OUTPUT_TOKENS=
-OPENAI_TIMEOUT_MS=
-OPENAI_MAX_RETRIES=
-AI_BATCH_CONCURRENCY=
-```
-
-### Switching AI providers
-
-Provider selection is entirely environment-driven, so no code change or
-rebuild is needed:
-
-```bash
-AI_PROVIDER=openai   # OpenAI Responses API (default)
-AI_PROVIDER=gemini   # Google Gemini (pre-migration path)
-```
-
-Verify a provider's credentials, model chain, and structured-output contract
-before deploying:
+**AI provider** is switchable via `AI_PROVIDER=openai|gemini`, no rebuild needed. Verify credentials and model chain before deploying:
 
 ```bash
 node scripts/verify-openai.mjs path/to/crop-photo.jpg
@@ -232,7 +97,7 @@ node scripts/verify-openai.mjs path/to/crop-photo.jpg
 
 ## Database Setup
 
-Run the SQL files in Supabase SQL Editor. For a fresh setup, use this order:
+Run in Supabase SQL Editor, in order:
 
 1. `supabase_schema.sql`
 2. `supabase_rls_patch.sql`
@@ -243,62 +108,26 @@ Run the SQL files in Supabase SQL Editor. For a fresh setup, use this order:
 7. `supabase_service_role_grant_fix.sql`
 8. `supabase_auth_emails_patch.sql`
 
-The `supabase_remove_agribusiness_role_patch.sql` migration is important for the current three-role model.
-
-`supabase_auth_emails_patch.sql` drops the `pending_signups` table, which is no
-longer used now that Supabase Auth sends the signup code itself. It only ever
-held in-flight registrations, so dropping it cannot affect a completed account.
-
 ---
 
 ## Local Development
 
-Install dependencies:
-
 ```bash
 pnpm install
-```
-
-Run the development server:
-
-```bash
-pnpm dev
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-Type-check:
-
-```bash
-npx tsc --noEmit
-```
-
-Build:
-
-```bash
+pnpm dev          # http://localhost:3000
+npx tsc --noEmit  # type-check
 pnpm build
 ```
 
-Note: this project uses `output: 'standalone'` in `next.config.ts`. On some Windows environments, the final standalone tracing step can fail if symlink creation is restricted, even after TypeScript and page generation succeed.
+> Windows note: `output: 'standalone'` can fail its final trace-copy step if symlink creation is restricted, even after a successful build.
 
 ---
 
 ## Stripe Billing Flow
 
-The billing flow is intentionally server-controlled:
+Client requests `/api/billing/checkout` → server validates user/plan → Stripe Checkout created → user pays → Stripe webhook hits `/api/billing/webhook` → webhook syncs `subscriptions` and `profiles.plan`.
 
-1. The client requests `/api/billing/checkout` with the selected paid plan.
-2. The server validates the authenticated user and selected plan.
-3. Stripe Checkout is created with the current app origin for success/cancel URLs.
-4. The user completes payment on Stripe.
-5. Stripe sends webhook events to `/api/billing/webhook`.
-6. The webhook synchronizes `subscriptions` and the cached `profiles.plan`.
-
-The client never grants itself a paid plan. Pro and Enterprise are applied only after Stripe webhook verification.
+The client never grants itself a paid plan.
 
 ---
 
@@ -316,8 +145,7 @@ pnpm clean    # Run Next clean
 
 ## Notes
 
-- The app supports three operation types only: `Gardener`, `Farmer`, and `Nursery`.
-- Free users receive 5 AI analyses per month.
-- Pro and Enterprise users have unlimited AI analyses.
-- Export formats are CSV, Excel, and PDF.
-- Billing, plan changes, and subscription status are managed through Stripe-hosted pages and webhooks.
+- Three operation types only: `Gardener`, `Farmer`, `Nursery`.
+- Free: 5 AI analyses/month. Pro/Enterprise: unlimited.
+- Exports: CSV, Excel, PDF.
+- Billing state is managed entirely through Stripe-hosted pages and webhooks.
