@@ -231,6 +231,8 @@ function BurgerIcon({ open }: { open: boolean }) {
 export default function LandingPage() {
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isHeaderHidden, setIsHeaderHidden] = React.useState(false);
+  const lastScrollY = React.useRef(0);
 
   React.useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
@@ -239,6 +241,18 @@ export default function LandingPage() {
     setIsDarkMode(shouldUseDark);
     document.documentElement.classList.toggle('dark', shouldUseDark);
   }, []);
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const scrolledPastThreshold = currentY > 96;
+      const scrollingDown = currentY > lastScrollY.current;
+      setIsHeaderHidden(!isMobileMenuOpen && scrolledPastThreshold && scrollingDown);
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobileMenuOpen]);
 
   const toggleDarkMode = () => {
     const next = !isDarkMode;
@@ -251,10 +265,10 @@ export default function LandingPage() {
     <div className="overflow-x-hidden bg-white text-stone-900 dark:bg-slate-950 dark:text-slate-100">
       {/* ── HEADER ── */}
       <motion.header
-        initial={{ y: -24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="sticky top-0 z-20 border-b border-stone-100 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80"
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: isHeaderHidden ? -100 : 0, opacity: 1 }}
+        transition={{ duration: 0.35, ease: 'easeInOut' }}
+        className="fixed inset-x-0 top-0 z-50 w-full border-b border-stone-100 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80"
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center space-x-2.5">
@@ -300,7 +314,10 @@ export default function LandingPage() {
               </Link>
             </motion.div>
             <button
-              onClick={() => setIsMobileMenuOpen((open) => !open)}
+              onClick={() => {
+                setIsMobileMenuOpen((open) => !open);
+                setIsHeaderHidden(false);
+              }}
               aria-label="Toggle menu"
               aria-expanded={isMobileMenuOpen}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 text-stone-600 dark:border-slate-700 dark:text-slate-300 md:hidden"
@@ -351,6 +368,7 @@ export default function LandingPage() {
           )}
         </AnimatePresence>
       </motion.header>
+      <div aria-hidden="true" className="h-16" />
 
       {/* ── HERO ── */}
       <section className="relative overflow-hidden">
@@ -469,7 +487,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+      <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20 sm:py-24">
         <motion.div
           initial="hidden"
           whileInView="show"
@@ -517,7 +535,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES (bento) ── */}
-      <section id="features" className="bg-stone-50 py-20 sm:py-24 dark:bg-slate-900/40">
+      <section id="features" className="scroll-mt-16 bg-stone-50 py-20 sm:py-24 dark:bg-slate-900/40">
         <div className="mx-auto max-w-6xl px-6">
           <motion.div
             initial="hidden"
@@ -581,7 +599,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── ROLES ── */}
-      <section id="roles" className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+      <section id="roles" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20 sm:py-24">
         <motion.div
           initial="hidden"
           whileInView="show"
@@ -642,7 +660,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── PRICING ── */}
-      <section id="pricing" className="bg-stone-50 py-20 sm:py-24 dark:bg-slate-900/40">
+      <section id="pricing" className="scroll-mt-16 bg-stone-50 py-20 sm:py-24 dark:bg-slate-900/40">
         <div className="mx-auto max-w-6xl px-6">
           <motion.div
             initial="hidden"
