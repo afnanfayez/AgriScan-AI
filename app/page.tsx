@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Sprout,
   ShieldCheck,
@@ -206,8 +206,31 @@ function ThemeToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => vo
   );
 }
 
+function BurgerIcon({ open }: { open: boolean }) {
+  return (
+    <div className="flex h-4 w-5 shrink-0 flex-col justify-between">
+      <motion.span
+        className="h-0.5 w-full rounded-full bg-current"
+        animate={open ? { rotate: 45, y: 7 } : { rotate: 0, y: 0 }}
+        transition={{ duration: 0.2 }}
+      />
+      <motion.span
+        className="h-0.5 w-full rounded-full bg-current"
+        animate={open ? { opacity: 0 } : { opacity: 1 }}
+        transition={{ duration: 0.15 }}
+      />
+      <motion.span
+        className="h-0.5 w-full rounded-full bg-current"
+        animate={open ? { rotate: -45, y: -7 } : { rotate: 0, y: 0 }}
+        transition={{ duration: 0.2 }}
+      />
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [isDarkMode, setIsDarkMode] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
@@ -225,7 +248,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="bg-white text-stone-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="overflow-x-hidden bg-white text-stone-900 dark:bg-slate-950 dark:text-slate-100">
       {/* ── HEADER ── */}
       <motion.header
         initial={{ y: -24, opacity: 0 }}
@@ -233,16 +256,18 @@ export default function LandingPage() {
         transition={{ duration: 0.5 }}
         className="sticky top-0 z-20 border-b border-stone-100 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80"
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center space-x-2.5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center space-x-2.5">
             <motion.div
               whileHover={{ rotate: 12, scale: 1.05 }}
-              className="rounded-xl p-1.5"
+              className="shrink-0 rounded-xl p-1.5"
               style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
             >
               <Sprout className="h-5 w-5 text-white" />
             </motion.div>
-            <span className="text-base font-bold tracking-tight text-stone-900 dark:text-slate-50">AgriScan AI</span>
+            <span className="truncate whitespace-nowrap text-base font-bold tracking-tight text-stone-900 dark:text-slate-50">
+              AgriScan AI
+            </span>
           </div>
 
           <nav className="hidden items-center space-x-8 md:flex">
@@ -257,25 +282,74 @@ export default function LandingPage() {
             ))}
           </nav>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <ThemeToggle isDark={isDarkMode} onToggle={toggleDarkMode} />
             <Link
               href="/login"
-              className="hidden text-sm font-medium text-stone-600 transition-colors hover:text-stone-900 sm:inline dark:text-slate-400 dark:hover:text-slate-100"
+              className="hidden text-sm font-medium text-stone-600 transition-colors hover:text-stone-900 md:inline dark:text-slate-400 dark:hover:text-slate-100"
             >
               Sign In
             </Link>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="hidden md:block">
               <Link
                 href="/register"
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                className="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm"
                 style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
               >
                 Get Started
               </Link>
             </motion.div>
+            <button
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+              aria-label="Toggle menu"
+              aria-expanded={isMobileMenuOpen}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 text-stone-600 dark:border-slate-700 dark:text-slate-300 md:hidden"
+            >
+              <BurgerIcon open={isMobileMenuOpen} />
+            </button>
           </div>
         </div>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden border-t border-stone-100 dark:border-slate-800 md:hidden"
+            >
+              <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 sm:px-6">
+                {NAV_LINKS.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="rounded-lg px-3 py-2.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50 dark:text-slate-300 dark:hover:bg-slate-900"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+                <div className="my-2 border-t border-stone-100 dark:border-slate-800" />
+                <Link
+                  href="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50 dark:text-slate-300 dark:hover:bg-slate-900"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="mt-1 block rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm"
+                  style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
+                >
+                  Get Started
+                </Link>
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.header>
 
       {/* ── HERO ── */}
@@ -347,7 +421,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7, delay: 0.15 }}
-            className="relative mx-auto w-full max-w-md pb-10 pl-6 sm:pb-14 sm:pl-10"
+            className="relative mx-auto w-full max-w-md pb-10 pl-4 sm:pb-14 sm:pl-10"
           >
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl shadow-2xl">
               <Image
@@ -363,7 +437,7 @@ export default function LandingPage() {
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute bottom-0 left-0 w-60 rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-xl backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/95 sm:w-64"
+              className="absolute bottom-0 left-0 w-[calc(100%-2rem)] max-w-[13rem] rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-xl backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/95 sm:max-w-[16rem]"
             >
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
