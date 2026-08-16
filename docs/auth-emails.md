@@ -18,7 +18,7 @@ The app's side of the contract is only this:
 
 ## Required dashboard setup
 
-Nothing below can be done from code. Do all four steps, in order.
+Nothing below can be done from code. Do all five steps, in order.
 
 ### 1. Turn on email confirmation
 
@@ -102,6 +102,20 @@ code" click returns a rate-limit error.
 
 The app maps these to a `429` with the message *"Too many email requests. Please
 wait a minute before trying again."*
+
+### 5. Match the OTP length
+
+**Authentication -> Sign In / Providers -> Email -> Email OTP length**
+
+Whatever this is set to, `NEXT_PUBLIC_AUTH_OTP_LENGTH` must equal it (default 6).
+
+A mismatch fails in a genuinely misleading way. If Supabase issues 8 digits but
+the UI renders 6 boxes, the user physically cannot enter the whole code; a
+truncated token reaches GoTrue, and GoTrue answers `otp_expired` - "token has
+expired or is invalid" - because it uses that one error for *invalid* tokens as
+well as expired ones. The logs then show a code failing 90 seconds after being
+issued against a 3600-second expiry, which points at everything except the real
+cause.
 
 ---
 

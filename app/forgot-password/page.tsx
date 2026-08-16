@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { OTP_LENGTH, OTP_BOX_CLASS, emptyOtpDigits } from '@/lib/auth-otp';
 
 type Step = 'request' | 'otp' | 'newpass';
 
@@ -29,7 +30,7 @@ function ForgotPasswordForm() {
   const step: Step = stepParam === 'otp' ? 'otp' : stepParam === 'newpass' ? 'newpass' : 'request';
 
   const [resetEmail, setResetEmail] = useState(searchParams?.get('email') || '');
-  const [resetOtpDigits, setResetOtpDigits] = useState(['', '', '', '', '', '']);
+  const [resetOtpDigits, setResetOtpDigits] = useState(emptyOtpDigits());
   const resetOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -61,7 +62,7 @@ function ForgotPasswordForm() {
     const next = [...resetOtpDigits];
     next[index] = value;
     setResetOtpDigits(next);
-    if (value && index < 5) resetOtpRefs.current[index + 1]?.focus();
+    if (value && index < OTP_LENGTH - 1) resetOtpRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -71,10 +72,10 @@ function ForgotPasswordForm() {
   };
 
   const handleOtpPaste = (e: React.ClipboardEvent) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (pasted.length === OTP_LENGTH) {
       setResetOtpDigits(pasted.split(''));
-      resetOtpRefs.current[5]?.focus();
+      resetOtpRefs.current[OTP_LENGTH - 1]?.focus();
     }
   };
 
@@ -85,7 +86,7 @@ function ForgotPasswordForm() {
     const res = await requestPasswordReset(resetEmail);
     setIsSubmitting(false);
     if (res.success) {
-      setResetOtpDigits(['', '', '', '', '', '']);
+      setResetOtpDigits(emptyOtpDigits());
       setResendCooldown(60);
       router.push(`/forgot-password?step=otp&email=${encodeURIComponent(resetEmail)}`);
     } else {
@@ -95,7 +96,7 @@ function ForgotPasswordForm() {
 
   const handleVerifyResetOtp = async () => {
     const code = resetOtpDigits.join('');
-    if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
+    if (code.length < OTP_LENGTH) { setAuthError(`Please enter all ${OTP_LENGTH} digits.`); return; }
     setAuthError('');
     setIsSubmitting(true);
     const res = await verifyResetCode(resetEmail, code);
@@ -106,7 +107,7 @@ function ForgotPasswordForm() {
       router.push(`/forgot-password?step=newpass&email=${encodeURIComponent(resetEmail)}`);
     } else {
       setAuthError(res.error || 'Invalid code. Please try again.');
-      setResetOtpDigits(['', '', '', '', '', '']);
+      setResetOtpDigits(emptyOtpDigits());
       resetOtpRefs.current[0]?.focus();
     }
   };
@@ -117,7 +118,7 @@ function ForgotPasswordForm() {
     const res = await requestPasswordReset(resetEmail);
     if (res.success) {
       setResendCooldown(60);
-      setResetOtpDigits(['', '', '', '', '', '']);
+      setResetOtpDigits(emptyOtpDigits());
       resetOtpRefs.current[0]?.focus();
     } else {
       setAuthError(res.error || 'Failed to resend code.');
@@ -156,7 +157,7 @@ function ForgotPasswordForm() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Check your email</h2>
-              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the 6-digit code sent to <span className="text-emerald-600 dark:text-emerald-400 font-medium">{resetEmail}</span></p>
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the {OTP_LENGTH}-digit code sent to <span className="text-emerald-600 dark:text-emerald-400 font-medium">{resetEmail}</span></p>
             </div>
           </div>
 
@@ -169,8 +170,8 @@ function ForgotPasswordForm() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-3 text-center">6-digit reset code</label>
-              <div className="flex items-center justify-center space-x-2">
+              <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-3 text-center">{OTP_LENGTH}-digit reset code</label>
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                 {resetOtpDigits.map((d, i) => (
                   <input
                     key={i}
@@ -179,7 +180,7 @@ function ForgotPasswordForm() {
                     onChange={(e) => handleOtpChange(i, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     onPaste={handleOtpPaste}
-                    className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
+                    className={`${OTP_BOX_CLASS} text-center font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
                   />
                 ))}
               </div>
@@ -187,7 +188,7 @@ function ForgotPasswordForm() {
 
             <button
               onClick={handleVerifyResetOtp}
-              disabled={isSubmitting || resetOtpDigits.join('').length < 6}
+              disabled={isSubmitting || resetOtpDigits.join('').length < OTP_LENGTH}
               className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
             >

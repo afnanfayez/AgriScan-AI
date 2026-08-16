@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   RefreshCw,
 } from 'lucide-react';
+import { OTP_LENGTH, OTP_BOX_CLASS, emptyOtpDigits } from '@/lib/auth-otp';
 
 function RegisterForm() {
   const router = useRouter();
@@ -36,7 +37,7 @@ function RegisterForm() {
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpDigits, setOtpDigits] = useState(emptyOtpDigits());
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -60,7 +61,7 @@ function RegisterForm() {
     const next = [...otpDigits];
     next[index] = value;
     setOtpDigits(next);
-    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+    if (value && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -70,10 +71,10 @@ function RegisterForm() {
   };
 
   const handleOtpPaste = (e: React.ClipboardEvent) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (pasted.length === OTP_LENGTH) {
       setOtpDigits(pasted.split(''));
-      otpRefs.current[5]?.focus();
+      otpRefs.current[OTP_LENGTH - 1]?.focus();
     }
   };
 
@@ -88,7 +89,7 @@ function RegisterForm() {
     const res = await signup(email, password, name, accountType);
     setIsSubmitting(false);
     if (res.success) {
-      setOtpDigits(['', '', '', '', '', '']);
+      setOtpDigits(emptyOtpDigits());
       setResendCooldown(60);
       router.push(`/register?step=verify&email=${encodeURIComponent(email)}`);
     } else {
@@ -98,7 +99,7 @@ function RegisterForm() {
 
   const handleVerifyOtp = async () => {
     const code = otpDigits.join('');
-    if (code.length < 6) { setAuthError('Please enter all 6 digits.'); return; }
+    if (code.length < OTP_LENGTH) { setAuthError(`Please enter all ${OTP_LENGTH} digits.`); return; }
     setAuthError('');
     setIsSubmitting(true);
     const res = await verifyEmail(code, emailFromUrl || email);
@@ -107,7 +108,7 @@ function RegisterForm() {
       router.refresh();
     } else {
       setAuthError(res.error || 'Invalid code. Please try again.');
-      setOtpDigits(['', '', '', '', '', '']);
+      setOtpDigits(emptyOtpDigits());
       otpRefs.current[0]?.focus();
       setIsSubmitting(false);
     }
@@ -119,7 +120,7 @@ function RegisterForm() {
     const res = await resendVerificationCode(emailFromUrl || email);
     if (res.success) {
       setResendCooldown(60);
-      setOtpDigits(['', '', '', '', '', '']);
+      setOtpDigits(emptyOtpDigits());
       otpRefs.current[0]?.focus();
     } else {
       setAuthError(res.error || 'Failed to resend code.');
@@ -136,7 +137,7 @@ function RegisterForm() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-stone-900 dark:text-slate-50 tracking-tight">Check your inbox</h2>
-              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the 6-digit code sent to <strong className="text-stone-900 dark:text-slate-200">{emailFromUrl}</strong></p>
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">Enter the {OTP_LENGTH}-digit code sent to <strong className="text-stone-900 dark:text-slate-200">{emailFromUrl}</strong></p>
             </div>
           </div>
 
@@ -148,8 +149,8 @@ function RegisterForm() {
           )}
 
           <div className="mb-6">
-            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 tracking-wider mb-3 text-center uppercase">6-digit verification code</label>
-            <div className="flex items-center justify-center space-x-2">
+            <label className="block text-xs font-semibold text-stone-500 dark:text-slate-400 tracking-wider mb-3 text-center uppercase">{OTP_LENGTH}-digit verification code</label>
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2">
               {otpDigits.map((d, i) => (
                 <input
                   key={i}
@@ -161,7 +162,7 @@ function RegisterForm() {
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={handleOtpPaste}
-                  className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
+                  className={`${OTP_BOX_CLASS} text-center font-bold rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${d ? 'bg-emerald-50 border-emerald-600 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-500 dark:text-emerald-100' : 'bg-stone-50 border-stone-200 text-stone-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100'}`}
                 />
               ))}
             </div>
@@ -169,7 +170,7 @@ function RegisterForm() {
 
           <button
             onClick={handleVerifyOtp}
-            disabled={isSubmitting || otpDigits.join('').length < 6}
+            disabled={isSubmitting || otpDigits.join('').length < OTP_LENGTH}
             className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
           >
